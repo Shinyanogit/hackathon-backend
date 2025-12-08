@@ -1,0 +1,27 @@
+# Binaries and builds
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build/cache
+*.test
+*.out
+*.log
+coverage.*
+*.prof
+*.pprof
+
+# Vendor
+vendor/
+
+# IDE/editor
+.idea/
+.vscode/
+
+# Env/config
+.env
+.env.local
+.DS_Store
