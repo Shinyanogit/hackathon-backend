@@ -5,9 +5,15 @@ type errorPayload struct {
 	Message string `json:"message"`
 }
 
-func ErrorResponse(code, message string) errorPayload {
-	return errorPayload{
-		Code:    code,
-		Message: message,
+type ErrorResponse struct {
+	Error errorPayload `json:"error"`
+}
+
+func NewErrorResponse(code, message string) ErrorResponse {
+	return ErrorResponse{
+		Error: errorPayload{
+			Code:    code,
+			Message: message,
+		},
 	}
 }
