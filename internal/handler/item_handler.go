@@ -23,7 +23,7 @@ type ItemResponse struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	Price       uint    `json:"price"`
-	ImageURL    *string `json:"imageUrl,omitempty"`
+	ImageURL    *string `json:"imageUrl"`
 	CreatedAt   string  `json:"createdAt"`
 	UpdatedAt   string  `json:"updatedAt"`
 }

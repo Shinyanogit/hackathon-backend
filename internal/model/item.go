@@ -7,7 +7,7 @@ type Item struct {
 	Title       string    `gorm:"size:120;not null"`
 	Description string    `gorm:"type:text;not null"`
 	Price       uint      `gorm:"not null"`
-	ImageURL    *string   `gorm:"size:512"`
+	ImageURL    *string   `gorm:"column:image_url;size:512" json:"imageUrl,omitempty"`
 	CreatedAt   time.Time `gorm:"autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
 }
