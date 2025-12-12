@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"gorm.io/gorm"
@@ -11,6 +12,7 @@ type ItemRepository interface {
 	Create(ctx context.Context, item *model.Item) error
 	FindByID(ctx context.Context, id uint64) (*model.Item, error)
 	List(ctx context.Context, limit, offset int) ([]model.Item, int64, error)
+	FindByImageURL(ctx context.Context, imageURL string) (*model.Item, error)
 }
 
 type itemRepository struct {
@@ -49,4 +51,17 @@ func (r *itemRepository) List(ctx context.Context, limit, offset int) ([]model.I
 		return nil, 0, err
 	}
 	return items, total, nil
+}
+
+func (r *itemRepository) FindByImageURL(ctx context.Context, imageURL string) (*model.Item, error) {
+	var item model.Item
+	if err := r.db.WithContext(ctx).
+		Where("image_url = ?", imageURL).
+		First(&item).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &item, nil
 }
