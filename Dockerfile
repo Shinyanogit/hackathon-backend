@@ -5,7 +5,7 @@ ARG CACHE_BUST=20251212
 # syntax=docker/dockerfile:1
 
 # --- builder stage ---
-FROM golang:1.23 AS builder
+FROM golang:1.23.1 AS builder
 
 WORKDIR /app
 
