@@ -29,7 +29,15 @@ func main() {
 	}
 
 	srv := server.New(conn)
-	addr := ":" + cfg.Port
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = cfg.Port
+	}
+	if port == "" {
+		port = "8080"
+	}
+
+	addr := ":" + port
 	log.Printf("starting server on %s", addr)
 	if err := srv.Start(addr); err != nil {
 		log.Printf("server stopped: %v", err)
