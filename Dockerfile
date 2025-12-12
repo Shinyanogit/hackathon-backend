@@ -1,4 +1,8 @@
 # syntax=docker/dockerfile:1
+ARG CACHE_BUST=20251212
+
+# --- builder stage ---
+# syntax=docker/dockerfile:1
 
 # --- builder stage ---
 FROM golang:1.23 AS builder
