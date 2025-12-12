@@ -1,6 +1,6 @@
 module github.com/shinyyama/hackathon-backend
 
-go 1.25.4
+go 1.22.7
 
 require (
 	github.com/caarlos0/env/v9 v9.0.0
