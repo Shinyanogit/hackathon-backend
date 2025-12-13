@@ -1,29 +1,28 @@
-options:
-  logging: CLOUD_LOGGING_ONLY
-
 steps:
-  # 1. Dockerイメージを作る
+  # Docker build（context を back に固定）
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - build
       - '-t'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/hackathon-backend-repo/backend:$SHORT_SHA'
-      - '.'
+      - 'gcr.io/$PROJECT_ID/hackathon-backend'
+      - '-f'
+      - 'back/Dockerfile'
+      - 'back'
 
-  # 2. イメージを保存（push）
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - push
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/hackathon-backend-repo/backend:$SHORT_SHA'
-
-  # 3. Cloud Run にデプロイ
+  # Cloud Run deploy
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - run
       - deploy
       - hackathon-backend
-      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/hackathon-backend-repo/backend:$SHORT_SHA'
-      - '--region=us-central1'
-      - '--platform=managed'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/hackathon-backend'
+      - '--region'
+      - 'asia-northeast1'
+      - '--platform'
+      - 'managed'
       - '--allow-unauthenticated'
+
+images:
+  - 'gcr.io/$PROJECT_ID/hackathon-backend'
