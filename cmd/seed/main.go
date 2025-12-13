@@ -3,12 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -17,12 +14,10 @@ import (
 )
 
 type seedItem struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Price       int64    `json:"price"`
-	Category    string   `json:"category"`
-	Tags        []string `json:"tags"`
-	Images      []string `json:"images"`
+	Title        string
+	Description  string
+	Price        int64
+	CategorySlug string
 }
 
 func main() {
@@ -34,15 +29,6 @@ func main() {
 func run() (err error) {
 	ctx := context.Background()
 	_ = godotenv.Load()
-
-	seedPath, err := findSeedPath()
-	if err != nil {
-		return err
-	}
-	items, err := loadSeed(seedPath)
-	if err != nil {
-		return err
-	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -56,6 +42,8 @@ func run() (err error) {
 	if err != nil {
 		return fmt.Errorf("sql db: %w", err)
 	}
+
+	items := buildSeedItems()
 
 	canSeed, err := shouldSeed(ctx, sqlDB)
 	if err != nil {
@@ -80,23 +68,14 @@ func run() (err error) {
 		}
 	}()
 
+	if _, err := tx.ExecContext(ctx, `TRUNCATE TABLE items`); err != nil {
+		return fmt.Errorf("truncate items: %w", err)
+	}
+
 	for idx, it := range items {
-		categoryID, err := ensureCategory(ctx, tx, strings.TrimSpace(it.Category))
-		if err != nil {
-			return err
-		}
+		imageURL := picsumURL(it.CategorySlug, idx+1, 1)
 
-		images := ensurePicsumImages(idx, len(it.Images))
-
-		itemID, err := insertItem(ctx, tx, it, categoryID, images[0])
-		if err != nil {
-			return err
-		}
-
-		if err := insertImages(ctx, tx, itemID, images); err != nil {
-			return err
-		}
-		if err := insertTags(ctx, tx, itemID, it.Tags); err != nil {
+		if _, err := insertItem(ctx, tx, it, imageURL); err != nil {
 			return err
 		}
 	}
@@ -105,79 +84,66 @@ func run() (err error) {
 		return fmt.Errorf("commit: %w", err)
 	}
 
-	log.Printf("seeded %d items from %s", len(items), seedPath)
+	log.Printf("seeded %d items", len(items))
 	return nil
 }
 
-func loadSeed(path string) ([]seedItem, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read seed file: %w", err)
+func buildSeedItems() []seedItem {
+	type cat struct {
+		Slug   string
+		Titles []string
+		Price  int64
 	}
-	var items []seedItem
-	if err := json.Unmarshal(data, &items); err != nil {
-		return nil, fmt.Errorf("decode json: %w", err)
+	categories := []cat{
+		{Slug: "fashion", Price: 4200, Titles: []string{"リラックスフィットフーディ", "オーガニックコットンTシャツ", "デニムクラシックジーンズ", "ライトナイロンパーカー"}},
+		{Slug: "beauty-cosmetics", Price: 3600, Titles: []string{"モイスチャーセラム", "シアーティントリップ", "ナチュラルUVミルク", "バランシングトナー"}},
+		{Slug: "phones-tablets-pcs", Price: 24000, Titles: []string{"14インチモバイルノート", "軽量タブレット64GB", "ワイヤレスメカニカルキーボード", "静音ワイヤレスマウス"}},
+		{Slug: "home-interior", Price: 7800, Titles: []string{"無垢材サイドテーブル", "コットンラグ 140x200", "スタッキングシェルフ", "フェイクグリーンポトス"}},
+		{Slug: "gaming-goods", Price: 8800, Titles: []string{"ワイヤレスゲームパッド", "ゲーミングヘッドセット", "大型マウスパッド", "メカニカルキーボードRGB"}},
+		{Slug: "books-magazines-comics", Price: 1400, Titles: []string{"SF小説アンソロジー", "旅雑誌最新号", "ビジネス書まとめ読み", "コミック新装版"}},
+		{Slug: "sports", Price: 6200, Titles: []string{"ランニングシューズ", "吸汗速乾Tシャツ", "トレーニングマット", "ステンレスボトル"}},
+		{Slug: "outdoor-travel", Price: 9200, Titles: []string{"コンパクトチェア", "ダウンブランケット", "チタンマグセット", "バックパック28L"}},
+		{Slug: "kitchen-daily", Price: 3200, Titles: []string{"セラミックフライパン", "ステンレスボトル", "二重ガラスマグ", "ウッドカッティングボード"}},
+		{Slug: "food-drink", Price: 2400, Titles: []string{"シングルオリジンコーヒー豆", "クラフトティーアソート", "グルテンフリーパスタ", "ダークチョコレートセット"}},
+		{Slug: "toys-hobbies", Price: 4800, Titles: []string{"ブロックキット中級", "カードゲーム拡張セット", "プラモデルスターター", "パズル1000ピース"}},
+		{Slug: "health-fitness", Price: 5400, Titles: []string{"フォームローラー", "ヨガブロック2個セット", "エクササイズバンド", "プロテインシェイカー"}},
+		{Slug: "baby-kids", Price: 3600, Titles: []string{"オーガニックベビーケット", "シリコンスタイ", "ソフトスニーカー キッズ", "知育ブロックセット"}},
+		{Slug: "pets", Price: 2800, Titles: []string{"コーデュラ首輪 M", "シリコン給水ボトル", "おもちゃロープ3本セット", "クールマット"}},
+		{Slug: "automotive", Price: 6400, Titles: []string{"車内用スマホホルダー", "コンパクト掃除機12V", "折りたたみ収納ボックス", "マイクロファイバークロスセット"}},
+		{Slug: "music", Price: 7600, Titles: []string{"ワイヤレスイヤホン", "エントリーオーディオインターフェース", "コンデンサーマイク", "スタジオモニターヘッドホン"}},
+		{Slug: "camera-photo", Price: 12800, Titles: []string{"ミラーレス用単焦点レンズ", "カメラ用スリングバッグ", "カーボントラベルトライポッド"}},
+		{Slug: "office-supplies", Price: 2600, Titles: []string{"人間工学マウスパッド", "A4ドキュメントスタンド", "ワイヤレステンキー", "LEDデスクライト"}},
+		{Slug: "diy-tools", Price: 5800, Titles: []string{"コードレスドライバー", "マルチツールセット", "安全ゴーグル", "作業グローブ"}},
+		{Slug: "collectibles", Price: 7200, Titles: []string{"ビンテージポスター複製", "コレクタブルフィギュア", "限定トレカスリーブ"}},
+		{Slug: "art-crafts", Price: 4200, Titles: []string{"アクリル絵具セット", "キャンバスパネル3枚", "カリグラフィーペンセット", "水彩紙スケッチブック"}},
+		{Slug: "others", Price: 3000, Titles: []string{"ケーブルオーガナイザー", "マルチポーチ", "トラベルアダプター", "ノイズリダクション耳栓"}},
 	}
-	if len(items) == 0 {
-		return nil, errors.New("seed file is empty")
-	}
-	return items, nil
-}
 
-func findSeedPath() (string, error) {
-	candidates := []string{
-		"items_seed_01.json",
-		filepath.Join("cmd", "seed", "items_seed_01.json"),
-	}
-	if exe, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "items_seed_01.json"))
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c, nil
+	var items []seedItem
+	for _, c := range categories {
+		for i, t := range c.Titles {
+			price := c.Price + int64((i+1)*100)
+			desc := fmt.Sprintf("%s（%s）。新品に近い自宅保管品です。即購入OK、返品不可。", t, c.Slug)
+			items = append(items, seedItem{
+				Title:        t,
+				Description:  desc,
+				Price:        price,
+				CategorySlug: c.Slug,
+			})
 		}
 	}
-	return "", fmt.Errorf("items_seed_01.json not found (checked: %s)", strings.Join(candidates, ", "))
+	return items
 }
 
-func ensureCategory(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
-	if name == "" {
-		return 0, errors.New("category name is required")
-	}
-	res, err := tx.ExecContext(ctx, `INSERT INTO categories (name) VALUES (?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)`, name)
-	if err != nil {
-		return 0, fmt.Errorf("insert category %q: %w", name, err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("category last insert id: %w", err)
-	}
-	return id, nil
-}
-
-func ensureTag(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
-	if name == "" {
-		return 0, errors.New("tag name is required")
-	}
-	res, err := tx.ExecContext(ctx, `INSERT INTO tags (name) VALUES (?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)`, name)
-	if err != nil {
-		return 0, fmt.Errorf("insert tag %q: %w", name, err)
-	}
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("tag last insert id: %w", err)
-	}
-	return id, nil
-}
-
-func insertItem(ctx context.Context, tx *sql.Tx, item seedItem, categoryID int64, firstImage string) (int64, error) {
+func insertItem(ctx context.Context, tx *sql.Tx, item seedItem, imageURL string) (int64, error) {
 	title := strings.TrimSpace(item.Title)
 	description := strings.TrimSpace(item.Description)
-	imageURL := strings.TrimSpace(firstImage)
+	category := strings.TrimSpace(item.CategorySlug)
+	imageURL = strings.TrimSpace(imageURL)
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO items (title, description, price, category_id, image_url) VALUES (?, ?, ?, ?, ?)`,
-		title, description, item.Price, categoryID, imageURL,
+		`INSERT INTO items (title, description, price, category_slug, image_url) VALUES (?, ?, ?, ?, ?)`,
+		title, description, item.Price, category, imageURL,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert item %q: %w", title, err)
@@ -190,53 +156,8 @@ func insertItem(ctx context.Context, tx *sql.Tx, item seedItem, categoryID int64
 }
 
 func insertImages(ctx context.Context, tx *sql.Tx, itemID int64, images []string) error {
-	for _, img := range images {
-		url := strings.TrimSpace(img)
-		if url == "" {
-			continue
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO item_images (item_id, image_url) VALUES (?, ?)`, itemID, url); err != nil {
-			return fmt.Errorf("insert image %q for item %d: %w", url, itemID, err)
-		}
-	}
+	// item_images テーブルがないためダミー
 	return nil
-}
-
-func insertTags(ctx context.Context, tx *sql.Tx, itemID int64, tags []string) error {
-	seen := make(map[string]struct{})
-	for _, tag := range tags {
-		name := strings.TrimSpace(tag)
-		if name == "" {
-			continue
-		}
-		key := strings.ToLower(name)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		tagID, err := ensureTag(ctx, tx, name)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO item_tags (item_id, tag_id) VALUES (?, ?)`, itemID, tagID); err != nil {
-			return fmt.Errorf("link tag %q to item %d: %w", name, itemID, err)
-		}
-		seen[key] = struct{}{}
-	}
-	return nil
-}
-
-func ensurePicsumImages(itemIdx int, desired int) []string {
-	if desired < 1 {
-		desired = 1
-	}
-	if desired > 3 {
-		desired = 3
-	}
-	urls := make([]string, desired)
-	for i := 0; i < desired; i++ {
-		urls[i] = fmt.Sprintf("https://picsum.photos/seed/item-%d-%d/800/600", itemIdx, i+1)
-	}
-	return urls
 }
 
 func shouldSeed(ctx context.Context, db *sql.DB) (bool, error) {
@@ -249,4 +170,8 @@ func shouldSeed(ctx context.Context, db *sql.DB) (bool, error) {
 	}
 	force := os.Getenv("FORCE_SEED")
 	return strings.EqualFold(force, "true"), nil
+}
+
+func picsumURL(slug string, itemIndex int, k int) string {
+	return fmt.Sprintf("https://picsum.photos/seed/%s-%d-%d/600/600", slug, itemIndex, k)
 }

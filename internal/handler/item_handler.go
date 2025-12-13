@@ -21,13 +21,14 @@ func NewItemHandler(svc service.ItemService) *ItemHandler {
 }
 
 type ItemResponse struct {
-	ID          uint64  `json:"id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Price       uint    `json:"price"`
-	ImageURL    *string `json:"imageUrl"`
-	CreatedAt   string  `json:"createdAt"`
-	UpdatedAt   string  `json:"updatedAt"`
+	ID           uint64  `json:"id"`
+	Title        string  `json:"title"`
+	Description  string  `json:"description"`
+	Price        uint    `json:"price"`
+	ImageURL     *string `json:"imageUrl"`
+	CategorySlug string  `json:"categorySlug"`
+	CreatedAt    string  `json:"createdAt"`
+	UpdatedAt    string  `json:"updatedAt"`
 }
 
 type ItemListResponse struct {
@@ -73,7 +74,8 @@ func (h *ItemHandler) Get(c echo.Context) error {
 func (h *ItemHandler) List(c echo.Context) error {
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
-	items, total, err := h.svc.List(c.Request().Context(), limit, offset)
+	category := c.QueryParam("category")
+	items, total, err := h.svc.List(c.Request().Context(), limit, offset, category)
 	if err != nil {
 		c.Logger().Errorf("list items error: %v", err)
 		if errors.Is(err, repository.ErrDBNotReady) {
@@ -93,12 +95,13 @@ func (h *ItemHandler) List(c echo.Context) error {
 
 func toItemResponse(item *model.Item) ItemResponse {
 	return ItemResponse{
-		ID:          item.ID,
-		Title:       item.Title,
-		Description: item.Description,
-		Price:       item.Price,
-		ImageURL:    item.ImageURL,
-		CreatedAt:   item.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   item.UpdatedAt.Format(time.RFC3339),
+		ID:           item.ID,
+		Title:        item.Title,
+		Description:  item.Description,
+		Price:        item.Price,
+		ImageURL:     item.ImageURL,
+		CategorySlug: item.CategorySlug,
+		CreatedAt:    item.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:    item.UpdatedAt.Format(time.RFC3339),
 	}
 }
