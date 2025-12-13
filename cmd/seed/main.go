@@ -80,18 +80,20 @@ func run() (err error) {
 		}
 	}()
 
-	for _, it := range items {
+	for idx, it := range items {
 		categoryID, err := ensureCategory(ctx, tx, strings.TrimSpace(it.Category))
 		if err != nil {
 			return err
 		}
 
-		itemID, err := insertItem(ctx, tx, it, categoryID)
+		images := ensurePicsumImages(idx, len(it.Images))
+
+		itemID, err := insertItem(ctx, tx, it, categoryID, images[0])
 		if err != nil {
 			return err
 		}
 
-		if err := insertImages(ctx, tx, itemID, it.Images); err != nil {
+		if err := insertImages(ctx, tx, itemID, images); err != nil {
 			return err
 		}
 		if err := insertTags(ctx, tx, itemID, it.Tags); err != nil {
@@ -168,15 +170,10 @@ func ensureTag(ctx context.Context, tx *sql.Tx, name string) (int64, error) {
 	return id, nil
 }
 
-func insertItem(ctx context.Context, tx *sql.Tx, item seedItem, categoryID int64) (int64, error) {
+func insertItem(ctx context.Context, tx *sql.Tx, item seedItem, categoryID int64, firstImage string) (int64, error) {
 	title := strings.TrimSpace(item.Title)
 	description := strings.TrimSpace(item.Description)
-	var imageURL *string
-	if len(item.Images) > 0 {
-		if v := strings.TrimSpace(item.Images[0]); v != "" {
-			imageURL = &v
-		}
-	}
+	imageURL := strings.TrimSpace(firstImage)
 
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO items (title, description, price, category_id, image_url) VALUES (?, ?, ?, ?, ?)`,
@@ -226,6 +223,20 @@ func insertTags(ctx context.Context, tx *sql.Tx, itemID int64, tags []string) er
 		seen[key] = struct{}{}
 	}
 	return nil
+}
+
+func ensurePicsumImages(itemIdx int, desired int) []string {
+	if desired < 1 {
+		desired = 1
+	}
+	if desired > 3 {
+		desired = 3
+	}
+	urls := make([]string, desired)
+	for i := 0; i < desired; i++ {
+		urls[i] = fmt.Sprintf("https://picsum.photos/seed/item-%d-%d/800/600", itemIdx, i+1)
+	}
+	return urls
 }
 
 func shouldSeed(ctx context.Context, db *sql.DB) (bool, error) {
