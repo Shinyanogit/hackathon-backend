@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/shinyyama/hackathon-backend/internal/model"
+	"github.com/shinyyama/hackathon-backend/internal/repository"
 	"github.com/shinyyama/hackathon-backend/internal/service"
 )
 
@@ -73,6 +75,10 @@ func (h *ItemHandler) List(c echo.Context) error {
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
 	items, total, err := h.svc.List(c.Request().Context(), limit, offset)
 	if err != nil {
+		c.Logger().Errorf("list items error: %v", err)
+		if errors.Is(err, repository.ErrDBNotReady) {
+			return c.JSON(http.StatusServiceUnavailable, NewErrorResponse("db_not_ready", "database is not connected"))
+		}
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch items"))
 	}
 	resp := ItemListResponse{

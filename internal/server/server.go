@@ -12,7 +12,8 @@ import (
 )
 
 type Server struct {
-	e *echo.Echo
+	e        *echo.Echo
+	itemRepo repository.ItemRepository
 }
 
 func New(db *gorm.DB) *Server {
@@ -39,9 +40,15 @@ func New(db *gorm.DB) *Server {
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
 
-	return &Server{e: e}
+	return &Server{e: e, itemRepo: itemRepo}
 }
 
 func (s *Server) Start(addr string) error {
 	return s.e.Start(addr)
+}
+
+func (s *Server) SetDB(db *gorm.DB) {
+	if s.itemRepo != nil {
+		s.itemRepo.SetDB(db)
+	}
 }
