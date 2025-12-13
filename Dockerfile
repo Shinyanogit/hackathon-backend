@@ -31,6 +31,7 @@ COPY --from=builder /bin/api /app/api
 COPY --from=builder /bin/seed /app/seed
 
 # Cloud Run listens on PORT (default 8080)
+COPY cmd/seed/items_seed_01.json /app/items_seed_01.json
 ENV PORT=8080
 
 # Run as nonroot user (distroless provides nonroot)
