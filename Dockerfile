@@ -18,14 +18,17 @@ COPY . .
 
 # Build the API binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /bin/api ./cmd/api
+# Build the seed binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /bin/seed ./cmd/seed
 
 # --- runtime stage ---
 FROM gcr.io/distroless/base-debian12:nonroot
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binaries from builder
 COPY --from=builder /bin/api /app/api
+COPY --from=builder /bin/seed /app/seed
 
 # Cloud Run listens on PORT (default 8080)
 ENV PORT=8080
