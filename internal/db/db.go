@@ -13,7 +13,11 @@ import (
 
 func BuildDSN(cfg *config.Config) string {
 	addr := cfg.DBHost
-	if strings.HasPrefix(cfg.DBHost, "tcp(") {
+
+	// Prefer Cloud SQL unix socket when INSTANCE_CONNECTION_NAME is provided.
+	if cfg.InstanceConnectionName != "" {
+		addr = fmt.Sprintf("unix(/cloudsql/%s)", cfg.InstanceConnectionName)
+	} else if strings.HasPrefix(cfg.DBHost, "tcp(") {
 		// already includes tcp()
 	} else if strings.HasPrefix(cfg.DBHost, "unix(") {
 		// already includes unix()
