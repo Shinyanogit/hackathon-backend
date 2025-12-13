@@ -7,9 +7,11 @@ type Item struct {
 	Title       string    `gorm:"size:120;not null"`
 	Description string    `gorm:"type:text;not null"`
 	Price       uint      `gorm:"not null"`
+	CategoryID  uint64    `gorm:"column:category_id;not null"`
 	ImageURL    *string   `gorm:"column:image_url;size:512" json:"imageUrl,omitempty"`
 	CreatedAt   time.Time `gorm:"autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"autoUpdateTime"`
+	Category    *Category `gorm:"constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"-"`
 }
 
 func (Item) TableName() string {

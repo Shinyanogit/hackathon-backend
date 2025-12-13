@@ -46,7 +46,13 @@ func main() {
 		} else {
 			log.Printf("server does not support SetDB; skipping DB injection")
 		}
-		if err := conn.AutoMigrate(&model.Item{}); err != nil {
+		if err := conn.AutoMigrate(
+			&model.Category{},
+			&model.Tag{},
+			&model.Item{},
+			&model.ItemImage{},
+			&model.ItemTag{},
+		); err != nil {
 			log.Printf("auto migrate error: %v", err)
 		}
 	}()
