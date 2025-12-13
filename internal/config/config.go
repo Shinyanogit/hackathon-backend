@@ -1,6 +1,10 @@
 package config
 
-import "github.com/caarlos0/env/v9"
+import (
+	"fmt"
+
+	"github.com/caarlos0/env/v9"
+)
 
 type Config struct {
 	Port                   string `env:"PORT" envDefault:"8080"`
