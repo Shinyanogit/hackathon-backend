@@ -1,3 +1,6 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
   # Docker build（context を back に固定）
   - name: 'gcr.io/cloud-builders/docker'
