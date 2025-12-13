@@ -13,7 +13,7 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type ItemService interface {
-	Create(ctx context.Context, title, description string, price uint, imageURL *string) (*model.Item, error)
+	Create(ctx context.Context, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error)
 	Get(ctx context.Context, id uint64) (*model.Item, error)
 	List(ctx context.Context, limit, offset int, categorySlug string) ([]model.Item, int64, error)
 }
@@ -26,21 +26,26 @@ func NewItemService(repo repository.ItemRepository) ItemService {
 	return &itemService{repo: repo}
 }
 
-func (s *itemService) Create(ctx context.Context, title, description string, price uint, imageURL *string) (*model.Item, error) {
+func (s *itemService) Create(ctx context.Context, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error) {
 	title = strings.TrimSpace(title)
 	description = strings.TrimSpace(description)
+	categorySlug = strings.TrimSpace(categorySlug)
 	if title == "" || len(title) > 120 {
 		return nil, errors.New("invalid title")
 	}
 	if description == "" {
 		return nil, errors.New("invalid description")
 	}
+	if categorySlug == "" {
+		return nil, errors.New("category is required")
+	}
 
 	item := &model.Item{
-		Title:       title,
-		Description: description,
-		Price:       price,
-		ImageURL:    imageURL,
+		Title:        title,
+		Description:  description,
+		Price:        price,
+		ImageURL:     imageURL,
+		CategorySlug: categorySlug,
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
 		return nil, err

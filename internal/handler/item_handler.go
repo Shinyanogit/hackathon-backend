@@ -37,10 +37,11 @@ type ItemListResponse struct {
 }
 
 type CreateItemRequest struct {
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Price       uint    `json:"price"`
-	ImageURL    *string `json:"imageUrl"`
+	Title        string  `json:"title"`
+	Description  string  `json:"description"`
+	Price        uint    `json:"price"`
+	ImageURL     *string `json:"imageUrl"`
+	CategorySlug string  `json:"categorySlug"`
 }
 
 func (h *ItemHandler) Create(c echo.Context) error {
@@ -48,7 +49,7 @@ func (h *ItemHandler) Create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
 	}
-	item, err := h.svc.Create(c.Request().Context(), req.Title, req.Description, req.Price, req.ImageURL)
+	item, err := h.svc.Create(c.Request().Context(), req.Title, req.Description, req.Price, req.ImageURL, req.CategorySlug)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
 	}
