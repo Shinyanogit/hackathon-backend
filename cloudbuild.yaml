@@ -8,19 +8,20 @@ steps:
       - 'Dockerfile'
       - '.'
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - hackathon-backend
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/hackathon-backend'
-      - '--region'
-      - 'asia-northeast1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
+ - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+    - run
+    - deploy
+    - hackathon-backend
+    - '--image'
+    - 'gcr.io/$PROJECT_ID/hackathon-backend:latest'
+    - '--region'
+    - 'asia-northeast1'
+    - '--platform'
+    - 'managed'
+    - '--allow-unauthenticated'
+
 
 images:
   - 'gcr.io/$PROJECT_ID/hackathon-backend'
