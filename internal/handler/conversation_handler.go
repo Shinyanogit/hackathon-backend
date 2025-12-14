@@ -75,7 +75,11 @@ func (h *ConversationHandler) List(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch conversations"))
 	}
 	resp := make([]ConversationResponse, 0, len(convs))
+	unread := 0
 	for _, cv := range convs {
+		if cv.HasUnread {
+			unread++
+		}
 		resp = append(resp, ConversationResponse{
 			ConversationID: cv.ID,
 			ItemID:         cv.ItemID,
@@ -84,6 +88,7 @@ func (h *ConversationHandler) List(c echo.Context) error {
 			HasUnread:      cv.HasUnread,
 		})
 	}
+	c.Logger().Infof("list conversations uid=%s count=%d unread=%d", uid, len(resp), unread)
 	return c.JSON(http.StatusOK, resp)
 }
 
@@ -126,8 +131,10 @@ func (h *ConversationHandler) MarkRead(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid conversation id"))
 	}
 	if err := h.svc.MarkRead(c.Request().Context(), convID, uid); err != nil {
+		c.Logger().Warnf("mark read failed uid=%s conv=%d err=%v", uid, convID, err)
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to mark read"))
 	}
+	c.Logger().Infof("mark read ok uid=%s conv=%d", uid, convID)
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 

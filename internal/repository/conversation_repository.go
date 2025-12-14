@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"gorm.io/gorm"
@@ -97,12 +98,13 @@ func (r *conversationRepository) ListMessages(ctx context.Context, convID uint64
 }
 
 func (r *conversationRepository) UpsertState(ctx context.Context, convID uint64, uid string) error {
+	now := time.Now()
 	return r.db.WithContext(ctx).Clauses(
 		clause.OnConflict{
 			Columns:   []clause.Column{{Name: "conversation_id"}, {Name: "uid"}},
 			DoUpdates: clause.Assignments(map[string]interface{}{"last_read_at": gorm.Expr("CURRENT_TIMESTAMP")}),
 		},
-	).Create(&model.ConversationState{ConversationID: convID, UID: uid}).Error
+	).Create(&model.ConversationState{ConversationID: convID, UID: uid, LastReadAt: now}).Error
 }
 
 func (r *conversationRepository) LastMessage(ctx context.Context, convID uint64) (*model.Message, error) {
