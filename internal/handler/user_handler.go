@@ -33,6 +33,7 @@ func (h *UserHandler) GetPublic(c echo.Context) error {
 		c.Logger().Warnf("get public user failed: uid=%s env_project=%s cred_project=%s err=%v", uid, h.envProject, h.credProject, err)
 		return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "user not found"))
 	}
+	// 読み取り時に displayName/photoURL を確実に使用
 	resp := PublicUserResponse{
 		UID:         user.UID,
 		DisplayName: user.DisplayName,
