@@ -22,6 +22,7 @@ type PurchaseService interface {
 	MarkDelivered(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error)
 	Cancel(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error)
 	ListByBuyer(ctx context.Context, buyerUID string) ([]PurchaseWithItem, error)
+	ListBySeller(ctx context.Context, sellerUID string) ([]PurchaseWithItem, error)
 }
 
 type purchaseService struct {
@@ -202,6 +203,25 @@ func (s *purchaseService) ListByBuyer(ctx context.Context, buyerUID string) ([]P
 		return nil, errors.New("buyer is required")
 	}
 	purchases, err := s.purchaseRepo.ListByBuyer(ctx, buyerUID)
+	if err != nil {
+		return nil, err
+	}
+	resp := make([]PurchaseWithItem, 0, len(purchases))
+	for _, p := range purchases {
+		item, _ := s.itemRepo.FindByID(ctx, p.ItemID)
+		resp = append(resp, PurchaseWithItem{
+			Purchase: p,
+			Item:     item,
+		})
+	}
+	return resp, nil
+}
+
+func (s *purchaseService) ListBySeller(ctx context.Context, sellerUID string) ([]PurchaseWithItem, error) {
+	if sellerUID == "" {
+		return nil, errors.New("seller is required")
+	}
+	purchases, err := s.purchaseRepo.ListBySeller(ctx, sellerUID)
 	if err != nil {
 		return nil, err
 	}
