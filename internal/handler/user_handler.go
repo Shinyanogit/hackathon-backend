@@ -8,11 +8,13 @@ import (
 )
 
 type UserHandler struct {
-	authClient *auth.Client
+	authClient  *auth.Client
+	envProject  string
+	credProject string
 }
 
-func NewUserHandler(client *auth.Client) *UserHandler {
-	return &UserHandler{authClient: client}
+func NewUserHandler(client *auth.Client, envProject, credProject string) *UserHandler {
+	return &UserHandler{authClient: client, envProject: envProject, credProject: credProject}
 }
 
 type PublicUserResponse struct {
@@ -28,6 +30,7 @@ func (h *UserHandler) GetPublic(c echo.Context) error {
 	}
 	user, err := h.authClient.GetUser(c.Request().Context(), uid)
 	if err != nil {
+		c.Logger().Warnf("get public user failed: uid=%s env_project=%s cred_project=%s err=%v", uid, h.envProject, h.credProject, err)
 		return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "user not found"))
 	}
 	resp := PublicUserResponse{

@@ -67,7 +67,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	}
 	var userHandler *handler.UserHandler
 	if authMw != nil && authMw.Client() != nil {
-		userHandler = handler.NewUserHandler(authMw.Client())
+		userHandler = handler.NewUserHandler(authMw.Client(), authMw.EnvProjectID(), authMw.CredProjectID())
 	}
 
 	e.GET("/healthz", func(c echo.Context) error {
