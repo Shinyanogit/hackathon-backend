@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
-	"os"
+	"net/url"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -28,37 +28,30 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	e.HideBanner = true
 	e.Use(middleware.Recover())
 	e.Use(middleware.Logger())
-
-	// CORS allowlist (localhost + Vercel 等)。FRONTEND_ORIGINS をカンマ区切りで上書き可。
-	allowed := map[string]struct{}{
-		"http://localhost:3000":  {},
-		"http://127.0.0.1:3000": {},
-	}
-	if env := os.Getenv("FRONTEND_ORIGINS"); env != "" {
-		for _, o := range strings.Split(env, ",") {
-			o = strings.TrimSpace(o)
-			if o != "" {
-				allowed[o] = struct{}{}
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+		AllowOriginFunc: func(origin string) (bool, error) {
+			low := strings.ToLower(origin)
+			if strings.HasPrefix(low, "http://localhost:") || strings.HasPrefix(low, "http://127.0.0.1:") ||
+				strings.HasPrefix(low, "https://localhost:") || strings.HasPrefix(low, "https://127.0.0.1:") {
+				return true, nil
 			}
-		}
-	}
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			origin := c.Request().Header.Get(echo.HeaderOrigin)
-			if _, ok := allowed[origin]; ok {
-				res := c.Response().Header()
-				res.Set(echo.HeaderAccessControlAllowOrigin, origin)
-				res.Set(echo.HeaderVary, "Origin")
-				res.Set(echo.HeaderAccessControlAllowMethods, "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-				res.Set(echo.HeaderAccessControlAllowHeaders, "Content-Type, Authorization")
-				res.Set(echo.HeaderAccessControlAllowCredentials, "true")
-				if c.Request().Method == http.MethodOptions {
-					return c.NoContent(http.StatusNoContent)
-				}
+			u, err := url.Parse(origin)
+			if err != nil {
+				return false, nil
 			}
-			return next(c)
-		}
-	})
+			if u.Scheme != "http" && u.Scheme != "https" {
+				return false, nil
+			}
+			host := u.Hostname()
+			if strings.HasSuffix(host, "vercel.app") {
+				return true, nil
+			}
+			return false, nil
+		},
+	}))
 
 	itemRepo := repository.NewItemRepository(db)
 	itemSvc := service.NewItemService(itemRepo)
