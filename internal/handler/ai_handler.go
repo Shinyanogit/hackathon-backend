@@ -98,7 +98,11 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 	}
 
 	body, _ := json.Marshal(payload)
-	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=%s", os.Getenv("GEMINI_API_KEY"))
+	model := os.Getenv("GEMINI_MODEL")
+	if model == "" {
+		model = "models/gemini-2.5-flash"
+	}
+	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent?key=%s", model, os.Getenv("GEMINI_API_KEY"))
 	resp, err := h.client.Post(endpoint, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", "failed to call gemini"))
@@ -107,7 +111,7 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 	if resp.StatusCode >= 300 {
 		var buf bytes.Buffer
 		_, _ = io.CopyN(&buf, resp.Body, 2048)
-		log.Printf("gemini upstream error: status=%d url=%s body=%q", resp.StatusCode, endpoint, buf.String())
+		log.Printf("gemini upstream error: status=%d url=%s body=%q", resp.StatusCode, redactKey(endpoint), buf.String())
 		return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", "gemini returned error"))
 	}
 	var gResp geminiResponse
@@ -122,4 +126,12 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 		answer = "回答を生成できませんでした。"
 	}
 	return c.JSON(http.StatusOK, map[string]string{"answer": answer})
+}
+
+func redactKey(url string) string {
+	key := os.Getenv("GEMINI_API_KEY")
+	if key == "" {
+		return url
+	}
+	return strings.ReplaceAll(url, key, "REDACTED")
 }
