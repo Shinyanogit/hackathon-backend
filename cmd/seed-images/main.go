@@ -31,6 +31,8 @@ type Config struct {
 	DBName         string `env:"DB_NAME,required"`
 	DBPort         string `env:"DB_PORT" envDefault:"3306"`
 	TimeoutSeconds int    `env:"TIMEOUT_SECONDS" envDefault:"300"`
+	UpdateImages   bool   `env:"UPDATE_IMAGES" envDefault:"false"`
+	ForceSeed      bool   `env:"FORCE_SEED" envDefault:"false"`
 }
 
 type Prompt struct {
@@ -82,34 +84,40 @@ func main() {
 	}
 	defer storageClient.Close()
 
-	prompts := []Prompt{
-		{Slug: "fashion-look", Prompt: "Product-style photo of a folded beige cardigan on a clean white background, soft daylight, minimal shadows."},
-		{Slug: "tech-gadget", Prompt: "Sleek smartphone and laptop flatlay on a light wooden desk, airy lighting, modern aesthetic."},
-		{Slug: "outdoor-gear", Prompt: "Neatly arranged camping gear (backpack, lantern, boots) on rustic wood, warm daylight, crisp focus."},
-	}
+	if cfg.UpdateImages {
+		if err := updateExistingItems(ctx, cfg, db, storageClient); err != nil {
+			log.Fatalf("update existing items failed: %v", err)
+		}
+	} else {
+		prompts := []Prompt{
+			{Slug: "fashion-look", Prompt: "Product-style photo of a folded beige cardigan on a clean white background, soft daylight, minimal shadows."},
+			{Slug: "tech-gadget", Prompt: "Sleek smartphone and laptop flatlay on a light wooden desk, airy lighting, modern aesthetic."},
+			{Slug: "outdoor-gear", Prompt: "Neatly arranged camping gear (backpack, lantern, boots) on rustic wood, warm daylight, crisp focus."},
+		}
 
-	for _, p := range prompts {
-		log.Printf("processing slug=%s", p.Slug)
-		imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, p)
-		if err != nil {
-			log.Printf("gemini failed (%s), fallback to placeholder: %v", p.Slug, err)
-			imageBytes, err = fetchPlaceholder(ctx, p.Slug)
+		for _, p := range prompts {
+			log.Printf("processing slug=%s", p.Slug)
+			imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, p)
 			if err != nil {
-				log.Fatalf("failed to fetch placeholder: %v", err)
+				log.Printf("gemini failed (%s), fallback to placeholder: %v", p.Slug, err)
+				imageBytes, err = fetchPlaceholder(ctx, p.Slug)
+				if err != nil {
+					log.Fatalf("failed to fetch placeholder: %v", err)
+				}
 			}
-		}
 
-		path := fmt.Sprintf("items/sample/%s.png", p.Slug)
-		publicURL, err := uploadWithToken(ctx, storageClient, cfg.StorageBucket, path, imageBytes)
-		if err != nil {
-			log.Fatalf("upload failed for %s: %v", p.Slug, err)
-		}
+			path := fmt.Sprintf("items/sample/%s.png", p.Slug)
+			publicURL, err := uploadWithToken(ctx, storageClient, cfg.StorageBucket, path, imageBytes)
+			if err != nil {
+				log.Fatalf("upload failed for %s: %v", p.Slug, err)
+			}
 
-		if err := upsertItem(ctx, db, p.Slug, publicURL); err != nil {
-			log.Fatalf("upsert failed for %s: %v", p.Slug, err)
-		}
+			if err := upsertItem(ctx, db, p.Slug, publicURL); err != nil {
+				log.Fatalf("upsert failed for %s: %v", p.Slug, err)
+			}
 
-		log.Printf("done slug=%s url=%s", p.Slug, publicURL)
+			log.Printf("done slug=%s url=%s", p.Slug, publicURL)
+		}
 	}
 
 	log.Println("seed-images completed successfully")
@@ -224,4 +232,51 @@ func upsertItem(ctx context.Context, db *gorm.DB, slug, imageURL string) error {
 
 	existing.ImageURL = &imageURL
 	return db.WithContext(ctx).Save(&existing).Error
+}
+
+func updateExistingItems(ctx context.Context, cfg Config, db *gorm.DB, storageClient *storage.Client) error {
+	var items []model.Item
+	q := db.WithContext(ctx).Model(&model.Item{})
+	if !cfg.ForceSeed {
+		q = q.Where("image_url LIKE ?", "https://picsum.photos/%")
+	}
+	if err := q.Find(&items).Error; err != nil {
+		return err
+	}
+	log.Printf("update mode: target items=%d (force=%v)", len(items), cfg.ForceSeed)
+	for _, it := range items {
+		log.Printf("[item %d] start title=%s", it.ID, it.Title)
+		prompt := Prompt{
+			Slug: fmt.Sprintf("item-%d", it.ID),
+			Prompt: fmt.Sprintf("Product photo for an online marketplace item titled '%s' in category '%s'. Clean studio lighting, simple background, high resolution.",
+				it.Title, it.CategorySlug),
+		}
+
+		imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, prompt)
+		if err != nil {
+			log.Printf("[item %d] gemini failed, fallback to picsum: %v", it.ID, err)
+			imageBytes, err = fetchPlaceholder(ctx, prompt.Slug)
+			if err != nil {
+				log.Printf("[item %d] fallback failed: %v", it.ID, err)
+				continue
+			}
+		} else {
+			log.Printf("[item %d] gemini success", it.ID)
+		}
+
+		path := fmt.Sprintf("items/sample/%d.png", it.ID)
+		publicURL, err := uploadWithToken(ctx, storageClient, cfg.StorageBucket, path, imageBytes)
+		if err != nil {
+			log.Printf("[item %d] upload failed: %v", it.ID, err)
+			continue
+		}
+		log.Printf("[item %d] upload success: %s", it.ID, publicURL)
+
+		if err := db.WithContext(ctx).Model(&model.Item{}).Where("id = ?", it.ID).Update("image_url", publicURL).Error; err != nil {
+			log.Printf("[item %d] db update failed: %v", it.ID, err)
+			continue
+		}
+		log.Printf("[item %d] db update success", it.ID)
+	}
+	return nil
 }
