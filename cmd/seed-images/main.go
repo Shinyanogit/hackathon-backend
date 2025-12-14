@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -67,7 +66,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect db: %v", err)
 	}
-	defer func() { _ = db.DB() }()
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("failed to get sql db: %v", err)
+	}
+	defer sqlDB.Close()
 
 	if err := db.AutoMigrate(&model.Item{}); err != nil {
 		log.Printf("warn: automigrate failed: %v", err)
