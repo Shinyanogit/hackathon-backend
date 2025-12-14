@@ -94,7 +94,7 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 		},
 		"generationConfig": map[string]interface{}{
 			"temperature":     0.5,
-			"maxOutputTokens": 256,
+			"maxOutputTokens": 512,
 		},
 	}
 
