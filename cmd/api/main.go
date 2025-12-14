@@ -9,13 +9,13 @@ import (
 	"github.com/shinyyama/hackathon-backend/internal/db"
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/server"
-	"gorm.io/gorm"
 )
 
 func main() {
 	_ = godotenv.Load()
 
-	srv := server.New(nil)
+	sha := os.Getenv("GIT_SHA")
+	buildTime := os.Getenv("BUILD_TIME")
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -25,30 +25,23 @@ func main() {
 
 	errCh := make(chan error, 1)
 
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config load error: %v", err)
+	}
+	conn, err := db.Connect(cfg)
+	if err != nil {
+		log.Fatalf("db connect error: %v", err)
+	}
+	if err := conn.AutoMigrate(&model.Item{}); err != nil {
+		log.Fatalf("auto migrate error: %v", err)
+	}
+
+	srv := server.New(conn, sha, buildTime)
+
 	go func() {
 		log.Printf("starting server on %s", addr)
 		errCh <- srv.Start(addr)
-	}()
-
-	go func() {
-		cfg, err := config.Load()
-		if err != nil {
-			log.Printf("config load error: %v", err)
-			return
-		}
-		conn, err := db.Connect(cfg)
-		if err != nil {
-			log.Printf("db connect error: %v", err)
-			return
-		}
-		if setter, ok := interface{}(srv).(interface{ SetDB(*gorm.DB) }); ok {
-			setter.SetDB(conn)
-		} else {
-			log.Printf("server does not support SetDB; skipping DB injection")
-		}
-		if err := conn.AutoMigrate(&model.Item{}); err != nil {
-			log.Printf("auto migrate error: %v", err)
-		}
 	}()
 
 	if err := <-errCh; err != nil {

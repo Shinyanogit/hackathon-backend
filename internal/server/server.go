@@ -1,9 +1,9 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
-	"context"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/shinyyama/hackathon-backend/internal/handler"
@@ -17,12 +17,11 @@ type Server struct {
 	e        *echo.Echo
 	itemRepo repository.ItemRepository
 	convRepo repository.ConversationRepository
+	sha      string
+	build    string
 }
 
-func New(db *gorm.DB) *Server {
-	if db == nil {
-		panic("db is nil")
-	}
+func New(db *gorm.DB, sha, buildTime string) *Server {
 	e := echo.New()
 	e.HideBanner = true
 	e.Use(middleware.Recover())
@@ -47,7 +46,11 @@ func New(db *gorm.DB) *Server {
 	}
 
 	e.GET("/healthz", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]bool{"ok": true})
+		return c.JSON(http.StatusOK, map[string]string{
+			"ok":         "true",
+			"git_sha":    sha,
+			"build_time": buildTime,
+		})
 	})
 
 	api := e.Group("/api")
@@ -69,7 +72,7 @@ func New(db *gorm.DB) *Server {
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
 
-	return &Server{e: e, itemRepo: itemRepo, convRepo: convRepo}
+	return &Server{e: e, itemRepo: itemRepo, convRepo: convRepo, sha: sha, build: buildTime}
 }
 
 func (s *Server) Start(addr string) error {
