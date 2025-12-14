@@ -24,6 +24,7 @@ import (
 
 type Config struct {
 	GeminiAPIKey   string `env:"GEMINI_API_KEY,required"`
+	GeminiModel    string `env:"GEMINI_MODEL" envDefault:"models/imagemodel@006"`
 	StorageBucket  string `env:"STORAGE_BUCKET,required"`
 	DBHost         string `env:"DB_HOST,required"`
 	DBUser         string `env:"DB_USER,required"`
@@ -74,6 +75,10 @@ func main() {
 	}
 	defer sqlDB.Close()
 
+	log.Printf("gemini model: %s", cfg.GeminiModel)
+	log.Printf("gemini endpoint: https://generativelanguage.googleapis.com/v1beta/%s:generateContent", cfg.GeminiModel)
+	log.Printf("gemini api key set: %v", cfg.GeminiAPIKey != "")
+
 	if err := db.AutoMigrate(&model.Item{}); err != nil {
 		log.Printf("warn: automigrate failed: %v", err)
 	}
@@ -97,7 +102,7 @@ func main() {
 
 		for _, p := range prompts {
 			log.Printf("processing slug=%s", p.Slug)
-			imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, p)
+			imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, cfg.GeminiModel, p)
 			if err != nil {
 				log.Printf("gemini failed (%s), fallback to placeholder: %v", p.Slug, err)
 				imageBytes, err = fetchPlaceholder(ctx, p.Slug)
@@ -139,19 +144,25 @@ func connectDB(cfg Config) (*gorm.DB, error) {
 	})
 }
 
-func generateImage(ctx context.Context, apiKey string, p Prompt) ([]byte, error) {
+func generateImage(ctx context.Context, apiKey, model string, p Prompt) ([]byte, error) {
 	reqBody := map[string]interface{}{
-		"prompt": map[string]interface{}{
-			"text": p.Prompt,
+		"contents": []map[string]interface{}{
+			{
+				"role": "user",
+				"parts": []map[string]string{
+					{"text": p.Prompt},
+				},
+			},
 		},
-		"numberOfImages": 1,
-		"mimeType":       "image/png",
+		"generationConfig": map[string]interface{}{
+			"mimeType": "image/png",
+		},
 	}
 
 	body, _ := json.Marshal(reqBody)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://generativelanguage.googleapis.com/v1beta/models/imagegeneration:generate?key="+url.QueryEscape(apiKey),
-		strings.NewReader(string(body)))
+	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent?key=%s",
+		url.PathEscape(model), url.QueryEscape(apiKey))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +271,7 @@ func updateExistingItems(ctx context.Context, cfg Config, db *gorm.DB, storageCl
 				it.Title, it.CategorySlug),
 		}
 
-		imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, prompt)
+		imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, cfg.GeminiModel, prompt)
 		if err != nil {
 			log.Printf("[item %d] gemini failed, fallback to picsum: %v", it.ID, err)
 			imageBytes, err = fetchPlaceholder(ctx, prompt.Slug)
