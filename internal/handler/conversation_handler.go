@@ -24,7 +24,9 @@ type ConversationResponse struct {
 }
 
 type MessageRequest struct {
-	Body string `json:"body"`
+	Body          string  `json:"body"`
+	SenderName    string  `json:"senderName"`
+	SenderIconUrl *string `json:"senderIconUrl"`
 }
 
 func (h *ConversationHandler) CreateFromItem(c echo.Context) error {
@@ -113,7 +115,7 @@ func (h *ConversationHandler) CreateMessage(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
 	}
-	if err := h.svc.CreateMessage(c.Request().Context(), convID, uid, req.Body); err != nil {
+	if err := h.svc.CreateMessage(c.Request().Context(), convID, uid, req.Body, req.SenderName, req.SenderIconUrl); err != nil {
 		if err == service.ErrNotFound {
 			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "conversation not found"))
 		}

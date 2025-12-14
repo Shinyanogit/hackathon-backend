@@ -13,7 +13,7 @@ type ConversationService interface {
 	CreateOrGet(ctx context.Context, itemID uint64, buyerUID string) (*model.Conversation, error)
 	ListByUser(ctx context.Context, uid string) ([]model.Conversation, error)
 	ListMessages(ctx context.Context, convID uint64, uid string) ([]model.Message, error)
-	CreateMessage(ctx context.Context, convID uint64, uid, body string) error
+	CreateMessage(ctx context.Context, convID uint64, uid, body, senderName string, senderIconURL *string) error
 }
 
 type conversationService struct {
@@ -60,7 +60,7 @@ func (s *conversationService) ListMessages(ctx context.Context, convID uint64, u
 	return s.convRepo.ListMessages(ctx, convID)
 }
 
-func (s *conversationService) CreateMessage(ctx context.Context, convID uint64, uid, body string) error {
+func (s *conversationService) CreateMessage(ctx context.Context, convID uint64, uid, body, senderName string, senderIconURL *string) error {
 	if body == "" {
 		return errors.New("body is required")
 	}
@@ -78,6 +78,8 @@ func (s *conversationService) CreateMessage(ctx context.Context, convID uint64, 
 		ConversationID: convID,
 		SenderUID:      uid,
 		Body:           body,
+		SenderName:     senderName,
+		SenderIconURL:  senderIconURL,
 	}
 	return s.convRepo.CreateMessage(ctx, msg)
 }
