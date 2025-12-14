@@ -13,6 +13,7 @@ type ItemRepository interface {
 	FindByID(ctx context.Context, id uint64) (*model.Item, error)
 	List(ctx context.Context, limit, offset int, categorySlug string) ([]model.Item, int64, error)
 	FindByImageURL(ctx context.Context, imageURL string) (*model.Item, error)
+	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
 	SetDB(db *gorm.DB)
 }
 
@@ -87,4 +88,18 @@ func (r *itemRepository) FindByImageURL(ctx context.Context, imageURL string) (*
 
 func (r *itemRepository) SetDB(db *gorm.DB) {
 	r.db = db
+}
+
+func (r *itemRepository) ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error) {
+	if r.db == nil {
+		return nil, ErrDBNotReady
+	}
+	var items []model.Item
+	if err := r.db.WithContext(ctx).
+		Where("seller_uid = ?", sellerUID).
+		Order("id DESC").
+		Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return items, nil
 }

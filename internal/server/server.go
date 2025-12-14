@@ -3,9 +3,11 @@ package server
 import (
 	"net/http"
 
+	"context"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/shinyyama/hackathon-backend/internal/handler"
+	appmw "github.com/shinyyama/hackathon-backend/internal/middleware"
 	"github.com/shinyyama/hackathon-backend/internal/repository"
 	"github.com/shinyyama/hackathon-backend/internal/service"
 	"gorm.io/gorm"
@@ -31,12 +33,23 @@ func New(db *gorm.DB) *Server {
 	itemSvc := service.NewItemService(itemRepo)
 	itemHandler := handler.NewItemHandler(itemSvc)
 
+	authMw, err := appmw.NewAuthMiddleware(context.Background())
+	if err != nil {
+		e.Logger.Errorf("failed to init firebase auth: %v", err)
+	}
+
 	e.GET("/healthz", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]bool{"ok": true})
 	})
 
 	api := e.Group("/api")
-	api.POST("/items", itemHandler.Create)
+	if authMw != nil {
+		api.POST("/items", itemHandler.Create, authMw.RequireAuth)
+		api.GET("/me/items", itemHandler.ListMine, authMw.RequireAuth)
+	} else {
+		api.POST("/items", itemHandler.Create)
+		api.GET("/me/items", itemHandler.ListMine)
+	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
 

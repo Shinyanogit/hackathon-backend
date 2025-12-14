@@ -27,6 +27,7 @@ type ItemResponse struct {
 	Price        uint    `json:"price"`
 	ImageURL     *string `json:"imageUrl"`
 	CategorySlug string  `json:"categorySlug"`
+	SellerUID    string  `json:"sellerUid"`
 	CreatedAt    string  `json:"createdAt"`
 	UpdatedAt    string  `json:"updatedAt"`
 }
@@ -42,6 +43,7 @@ type CreateItemRequest struct {
 	Price        uint    `json:"price"`
 	ImageURL     *string `json:"imageUrl"`
 	CategorySlug string  `json:"categorySlug"`
+	SellerUID    string  `json:"sellerUid"`
 }
 
 func (h *ItemHandler) Create(c echo.Context) error {
@@ -49,7 +51,8 @@ func (h *ItemHandler) Create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
 	}
-	item, err := h.svc.Create(c.Request().Context(), req.Title, req.Description, req.Price, req.ImageURL, req.CategorySlug)
+	sellerUID, _ := c.Get("uid").(string)
+	item, err := h.svc.Create(c.Request().Context(), req.Title, req.Description, req.Price, req.ImageURL, req.CategorySlug, sellerUID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
 	}
@@ -102,7 +105,27 @@ func toItemResponse(item *model.Item) ItemResponse {
 		Price:        item.Price,
 		ImageURL:     item.ImageURL,
 		CategorySlug: item.CategorySlug,
+		SellerUID:    item.SellerUID,
 		CreatedAt:    item.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    item.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+func (h *ItemHandler) ListMine(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	items, err := h.svc.ListBySeller(c.Request().Context(), uid)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch items"))
+	}
+	resp := ItemListResponse{
+		Items: make([]ItemResponse, 0, len(items)),
+		Total: int64(len(items)),
+	}
+	for i := range items {
+		resp.Items = append(resp.Items, toItemResponse(&items[i]))
+	}
+	return c.JSON(http.StatusOK, resp)
 }

@@ -13,9 +13,10 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type ItemService interface {
-	Create(ctx context.Context, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error)
+	Create(ctx context.Context, title, description string, price uint, imageURL *string, categorySlug string, sellerUID string) (*model.Item, error)
 	Get(ctx context.Context, id uint64) (*model.Item, error)
 	List(ctx context.Context, limit, offset int, categorySlug string) ([]model.Item, int64, error)
+	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
 }
 
 type itemService struct {
@@ -26,10 +27,11 @@ func NewItemService(repo repository.ItemRepository) ItemService {
 	return &itemService{repo: repo}
 }
 
-func (s *itemService) Create(ctx context.Context, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error) {
+func (s *itemService) Create(ctx context.Context, title, description string, price uint, imageURL *string, categorySlug string, sellerUID string) (*model.Item, error) {
 	title = strings.TrimSpace(title)
 	description = strings.TrimSpace(description)
 	categorySlug = strings.TrimSpace(categorySlug)
+	sellerUID = strings.TrimSpace(sellerUID)
 	if title == "" || len(title) > 120 {
 		return nil, errors.New("invalid title")
 	}
@@ -38,6 +40,9 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 	}
 	if categorySlug == "" {
 		return nil, errors.New("category is required")
+	}
+	if sellerUID == "" {
+		return nil, errors.New("seller is required")
 	}
 	if imageURL != nil && strings.HasPrefix(strings.TrimSpace(*imageURL), "data:") {
 		return nil, errors.New("imageUrl must be a URL, not data URI")
@@ -49,6 +54,7 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 		Price:        price,
 		ImageURL:     imageURL,
 		CategorySlug: categorySlug,
+		SellerUID:    sellerUID,
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
 		return nil, err
@@ -75,4 +81,11 @@ func (s *itemService) List(ctx context.Context, limit, offset int, categorySlug 
 		offset = 0
 	}
 	return s.repo.List(ctx, limit, offset, strings.TrimSpace(categorySlug))
+}
+
+func (s *itemService) ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error) {
+	if sellerUID == "" {
+		return nil, errors.New("seller is required")
+	}
+	return s.repo.ListBySeller(ctx, sellerUID)
 }
