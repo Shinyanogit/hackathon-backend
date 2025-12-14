@@ -39,6 +39,9 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 	if categorySlug == "" {
 		return nil, errors.New("category is required")
 	}
+	if imageURL != nil && strings.HasPrefix(strings.TrimSpace(*imageURL), "data:") {
+		return nil, errors.New("imageUrl must be a URL, not data URI")
+	}
 
 	item := &model.Item{
 		Title:        title,
