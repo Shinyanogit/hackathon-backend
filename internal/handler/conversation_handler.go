@@ -78,6 +78,34 @@ func (h *ConversationHandler) List(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+func (h *ConversationHandler) Get(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	convIDParam := c.Param("id")
+	convID, err := strconv.ParseUint(convIDParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid conversation id"))
+	}
+	cv, err := h.svc.Get(c.Request().Context(), convID, uid)
+	if err != nil {
+		if err == service.ErrNotFound {
+			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "conversation not found"))
+		}
+		if err.Error() == "forbidden" {
+			return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not a participant"))
+		}
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch conversation"))
+	}
+	return c.JSON(http.StatusOK, ConversationResponse{
+		ConversationID: cv.ID,
+		ItemID:         cv.ItemID,
+		SellerUID:      cv.SellerUID,
+		BuyerUID:       cv.BuyerUID,
+	})
+}
+
 func (h *ConversationHandler) ListMessages(c echo.Context) error {
 	uid, _ := c.Get("uid").(string)
 	if uid == "" {

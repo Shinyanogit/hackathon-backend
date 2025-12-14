@@ -12,6 +12,7 @@ import (
 type ConversationService interface {
 	CreateOrGet(ctx context.Context, itemID uint64, buyerUID string) (*model.Conversation, error)
 	ListByUser(ctx context.Context, uid string) ([]model.Conversation, error)
+	Get(ctx context.Context, convID uint64, uid string) (*model.Conversation, error)
 	ListMessages(ctx context.Context, convID uint64, uid string) ([]model.Message, error)
 	CreateMessage(ctx context.Context, convID uint64, uid, body, senderName string, senderIconURL *string) error
 }
@@ -44,6 +45,20 @@ func (s *conversationService) CreateOrGet(ctx context.Context, itemID uint64, bu
 
 func (s *conversationService) ListByUser(ctx context.Context, uid string) ([]model.Conversation, error) {
 	return s.convRepo.FindByUser(ctx, uid)
+}
+
+func (s *conversationService) Get(ctx context.Context, convID uint64, uid string) (*model.Conversation, error) {
+	cv, err := s.convRepo.FindByID(ctx, convID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if cv.BuyerUID != uid && cv.SellerUID != uid {
+		return nil, errors.New("forbidden")
+	}
+	return cv, nil
 }
 
 func (s *conversationService) ListMessages(ctx context.Context, convID uint64, uid string) ([]model.Message, error) {
