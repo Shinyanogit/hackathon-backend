@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 
 	firebase "firebase.google.com/go/v4"
@@ -15,7 +16,11 @@ type AuthMiddleware struct {
 }
 
 func NewAuthMiddleware(ctx context.Context) (*AuthMiddleware, error) {
-	app, err := firebase.NewApp(ctx, nil)
+	projectID := os.Getenv("FIREBASE_PROJECT_ID")
+	if projectID == "" {
+		return nil, echo.NewHTTPError(http.StatusInternalServerError, "FIREBASE_PROJECT_ID is not set")
+	}
+	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: projectID})
 	if err != nil {
 		return nil, err
 	}

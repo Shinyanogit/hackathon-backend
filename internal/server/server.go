@@ -35,7 +35,7 @@ func New(db *gorm.DB) *Server {
 
 	authMw, err := appmw.NewAuthMiddleware(context.Background())
 	if err != nil {
-		e.Logger.Errorf("failed to init firebase auth: %v", err)
+		e.Logger.Fatalf("failed to init firebase auth: %v", err)
 	}
 
 	e.GET("/healthz", func(c echo.Context) error {
