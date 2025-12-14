@@ -310,14 +310,10 @@ func upsertItem(ctx context.Context, db *gorm.DB, slug, imageURL string) error {
 
 func updateExistingItems(ctx context.Context, cfg Config, db *gorm.DB, storageClient *storage.Client) error {
 	var items []model.Item
-	q := db.WithContext(ctx).Model(&model.Item{})
-	if !cfg.ForceSeed {
-		q = q.Where("image_url LIKE ?", "https://picsum.photos/%")
-	}
-	if err := q.Find(&items).Error; err != nil {
+	if err := db.WithContext(ctx).Model(&model.Item{}).Find(&items).Error; err != nil {
 		return err
 	}
-	log.Printf("update mode: target items=%d (force=%v)", len(items), cfg.ForceSeed)
+	log.Printf("update mode: target items=%d (regenerate all images)", len(items))
 	for _, it := range items {
 		log.Printf("[item %d] start title=%s", it.ID, it.Title)
 		prompt := Prompt{
