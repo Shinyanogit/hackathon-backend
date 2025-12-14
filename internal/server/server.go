@@ -16,11 +16,12 @@ import (
 )
 
 type Server struct {
-	e        *echo.Echo
-	itemRepo repository.ItemRepository
-	convRepo repository.ConversationRepository
-	sha      string
-	build    string
+	e            *echo.Echo
+	itemRepo     repository.ItemRepository
+	convRepo     repository.ConversationRepository
+	purchaseRepo repository.PurchaseRepository
+	sha          string
+	build        string
 }
 
 func New(db *gorm.DB, sha, buildTime string) *Server {
@@ -61,6 +62,10 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	convSvc := service.NewConversationService(convRepo, itemRepo)
 	convHandler := handler.NewConversationHandler(convSvc)
 
+	purchaseRepo := repository.NewPurchaseRepository(db)
+	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo)
+	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
+
 	authMw, err := appmw.NewAuthMiddleware(context.Background())
 	if err != nil {
 		e.Logger.Fatalf("failed to init firebase auth: %v", err)
@@ -84,6 +89,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.PUT("/items/:id", itemHandler.Update, authMw.RequireAuth)
 		api.GET("/me/items", itemHandler.ListMine, authMw.RequireAuth)
 		api.POST("/items/:id/conversations", convHandler.CreateFromItem, authMw.RequireAuth)
+		api.POST("/items/:id/purchase", purchaseHandler.PurchaseItem, authMw.RequireAuth)
+		api.GET("/items/:id/purchase", purchaseHandler.GetByItem, authMw.RequireAuth)
 		api.GET("/items/:id/thread", convHandler.GetThread)
 		api.POST("/items/:id/messages", convHandler.PostMessageToItem, authMw.RequireAuth)
 		api.GET("/conversations", convHandler.List, authMw.RequireAuth)
@@ -92,11 +99,15 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/conversations/:id/messages", convHandler.CreateMessage, authMw.RequireAuth)
 		api.DELETE("/conversations/:id/messages/:msgId", convHandler.DeleteMessage, authMw.RequireAuth)
 		api.POST("/conversations/:id/read", convHandler.MarkRead, authMw.RequireAuth)
+		api.POST("/purchases/:id/ship", purchaseHandler.MarkShipped, authMw.RequireAuth)
+		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered, authMw.RequireAuth)
 	} else {
 		api.POST("/items", itemHandler.Create)
 		api.PUT("/items/:id", itemHandler.Update)
 		api.GET("/me/items", itemHandler.ListMine)
 		api.POST("/items/:id/conversations", convHandler.CreateFromItem)
+		api.POST("/items/:id/purchase", purchaseHandler.PurchaseItem)
+		api.GET("/items/:id/purchase", purchaseHandler.GetByItem)
 		api.GET("/items/:id/thread", convHandler.GetThread)
 		api.POST("/items/:id/messages", convHandler.PostMessageToItem)
 		api.GET("/conversations", convHandler.List)
@@ -105,6 +116,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/conversations/:id/messages", convHandler.CreateMessage)
 		api.DELETE("/conversations/:id/messages/:msgId", convHandler.DeleteMessage)
 		api.POST("/conversations/:id/read", convHandler.MarkRead)
+		api.POST("/purchases/:id/ship", purchaseHandler.MarkShipped)
+		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered)
 	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
@@ -112,7 +125,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.GET("/users/:uid/public", userHandler.GetPublic)
 	}
 
-	return &Server{e: e, itemRepo: itemRepo, convRepo: convRepo, sha: sha, build: buildTime}
+	return &Server{e: e, itemRepo: itemRepo, convRepo: convRepo, purchaseRepo: purchaseRepo, sha: sha, build: buildTime}
 }
 
 func (s *Server) Start(addr string) error {
@@ -125,5 +138,8 @@ func (s *Server) SetDB(db *gorm.DB) {
 	}
 	if s.convRepo != nil {
 		s.convRepo = repository.NewConversationRepository(db)
+	}
+	if s.purchaseRepo != nil {
+		s.purchaseRepo = repository.NewPurchaseRepository(db)
 	}
 }
