@@ -77,6 +77,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	api := e.Group("/api")
 	if authMw != nil {
 		api.POST("/items", itemHandler.Create, authMw.RequireAuth)
+		api.PUT("/items/:id", itemHandler.Update, authMw.RequireAuth)
 		api.GET("/me/items", itemHandler.ListMine, authMw.RequireAuth)
 		api.POST("/items/:id/conversations", convHandler.CreateFromItem, authMw.RequireAuth)
 		api.GET("/items/:id/thread", convHandler.GetThread)
@@ -89,6 +90,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/conversations/:id/read", convHandler.MarkRead, authMw.RequireAuth)
 	} else {
 		api.POST("/items", itemHandler.Create)
+		api.PUT("/items/:id", itemHandler.Update)
 		api.GET("/me/items", itemHandler.ListMine)
 		api.POST("/items/:id/conversations", convHandler.CreateFromItem)
 		api.GET("/items/:id/thread", convHandler.GetThread)

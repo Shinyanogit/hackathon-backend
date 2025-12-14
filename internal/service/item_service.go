@@ -17,6 +17,7 @@ type ItemService interface {
 	Get(ctx context.Context, id uint64) (*model.Item, error)
 	List(ctx context.Context, limit, offset int, categorySlug, query string) ([]model.Item, int64, error)
 	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
+	UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error)
 }
 
 type itemService struct {
@@ -88,4 +89,42 @@ func (s *itemService) ListBySeller(ctx context.Context, sellerUID string) ([]mod
 		return nil, errors.New("seller is required")
 	}
 	return s.repo.ListBySeller(ctx, sellerUID)
+}
+
+func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error) {
+	if sellerUID == "" {
+		return nil, errors.New("seller is required")
+	}
+	if imageURL != nil && strings.HasPrefix(strings.TrimSpace(*imageURL), "data:") {
+		return nil, errors.New("imageUrl must be a URL, not data URI")
+	}
+	fields := map[string]interface{}{}
+	if title != "" {
+		if len(strings.TrimSpace(title)) > 120 {
+			return nil, errors.New("invalid title")
+		}
+		fields["title"] = strings.TrimSpace(title)
+	}
+	if description != "" {
+		fields["description"] = strings.TrimSpace(description)
+	}
+	if price > 0 {
+		fields["price"] = price
+	}
+	if imageURL != nil {
+		fields["image_url"] = imageURL
+	}
+	if categorySlug != "" {
+		fields["category_slug"] = strings.TrimSpace(categorySlug)
+	}
+	if len(fields) == 0 {
+		return nil, errors.New("no fields to update")
+	}
+	if err := s.repo.UpdateBySeller(ctx, id, sellerUID, fields); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return s.Get(ctx, id)
 }

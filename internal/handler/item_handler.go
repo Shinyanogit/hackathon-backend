@@ -125,3 +125,52 @@ func (h *ItemHandler) ListMine(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, resp)
 }
+
+type UpdateItemRequest struct {
+	Title        *string `json:"title"`
+	Description  *string `json:"description"`
+	Price        *uint   `json:"price"`
+	ImageURL     *string `json:"imageUrl"`
+	CategorySlug *string `json:"categorySlug"`
+}
+
+func (h *ItemHandler) Update(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid id"))
+	}
+	var req UpdateItemRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
+	}
+	title := ""
+	if req.Title != nil {
+		title = *req.Title
+	}
+	description := ""
+	if req.Description != nil {
+		description = *req.Description
+	}
+	var price uint
+	if req.Price != nil {
+		price = *req.Price
+	}
+	imageURL := req.ImageURL
+	category := ""
+	if req.CategorySlug != nil {
+		category = *req.CategorySlug
+	}
+	item, err := h.svc.UpdateOwned(c.Request().Context(), id, uid, title, description, price, imageURL, category)
+	if err != nil {
+		if err == service.ErrNotFound {
+			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found or not owner"))
+		}
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+	}
+	return c.JSON(http.StatusOK, toItemResponse(item))
+}

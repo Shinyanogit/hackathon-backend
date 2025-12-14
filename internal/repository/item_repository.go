@@ -14,6 +14,7 @@ type ItemRepository interface {
 	List(ctx context.Context, limit, offset int, categorySlug, query string) ([]model.Item, int64, error)
 	FindByImageURL(ctx context.Context, imageURL string) (*model.Item, error)
 	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
+	UpdateBySeller(ctx context.Context, id uint64, sellerUID string, fields map[string]interface{}) error
 	SetDB(db *gorm.DB)
 }
 
@@ -89,4 +90,18 @@ func (r *itemRepository) ListBySeller(ctx context.Context, sellerUID string) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+func (r *itemRepository) UpdateBySeller(ctx context.Context, id uint64, sellerUID string, fields map[string]interface{}) error {
+	res := r.db.WithContext(ctx).
+		Model(&model.Item{}).
+		Where("id = ? AND seller_uid = ?", id, sellerUID).
+		Updates(fields)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
