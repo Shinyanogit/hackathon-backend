@@ -66,6 +66,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo)
 	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
 
+	aiHandler := handler.NewAIHandler(itemRepo, os.Getenv("GEMINI_API_KEY"))
+
 	authMw, err := appmw.NewAuthMiddleware(context.Background())
 	if err != nil {
 		e.Logger.Fatalf("failed to init firebase auth: %v", err)
@@ -93,6 +95,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/items/:id/conversations", convHandler.CreateFromItem, authMw.RequireAuth)
 		api.POST("/items/:id/purchase", purchaseHandler.PurchaseItem, authMw.RequireAuth)
 		api.GET("/items/:id/purchase", purchaseHandler.GetByItem, authMw.RequireAuth)
+		api.POST("/items/:id/ask", aiHandler.AskItem, authMw.RequireAuth)
 		api.GET("/items/:id/thread", convHandler.GetThread)
 		api.POST("/items/:id/messages", convHandler.PostMessageToItem, authMw.RequireAuth)
 		api.GET("/conversations", convHandler.List, authMw.RequireAuth)
@@ -113,6 +116,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/items/:id/conversations", convHandler.CreateFromItem)
 		api.POST("/items/:id/purchase", purchaseHandler.PurchaseItem)
 		api.GET("/items/:id/purchase", purchaseHandler.GetByItem)
+		api.POST("/items/:id/ask", aiHandler.AskItem)
 		api.GET("/items/:id/thread", convHandler.GetThread)
 		api.POST("/items/:id/messages", convHandler.PostMessageToItem)
 		api.GET("/conversations", convHandler.List)
