@@ -33,6 +33,10 @@ func New(db *gorm.DB) *Server {
 	itemSvc := service.NewItemService(itemRepo)
 	itemHandler := handler.NewItemHandler(itemSvc)
 
+	convRepo := repository.NewConversationRepository(db)
+	convSvc := service.NewConversationService(convRepo, itemRepo)
+	convHandler := handler.NewConversationHandler(convSvc)
+
 	authMw, err := appmw.NewAuthMiddleware(context.Background())
 	if err != nil {
 		e.Logger.Fatalf("failed to init firebase auth: %v", err)
@@ -46,9 +50,17 @@ func New(db *gorm.DB) *Server {
 	if authMw != nil {
 		api.POST("/items", itemHandler.Create, authMw.RequireAuth)
 		api.GET("/me/items", itemHandler.ListMine, authMw.RequireAuth)
+		api.POST("/items/:id/conversations", convHandler.CreateFromItem, authMw.RequireAuth)
+		api.GET("/conversations", convHandler.List, authMw.RequireAuth)
+		api.GET("/conversations/:id/messages", convHandler.ListMessages, authMw.RequireAuth)
+		api.POST("/conversations/:id/messages", convHandler.CreateMessage, authMw.RequireAuth)
 	} else {
 		api.POST("/items", itemHandler.Create)
 		api.GET("/me/items", itemHandler.ListMine)
+		api.POST("/items/:id/conversations", convHandler.CreateFromItem)
+		api.GET("/conversations", convHandler.List)
+		api.GET("/conversations/:id/messages", convHandler.ListMessages)
+		api.POST("/conversations/:id/messages", convHandler.CreateMessage)
 	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
