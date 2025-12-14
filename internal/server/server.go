@@ -16,9 +16,13 @@ import (
 type Server struct {
 	e        *echo.Echo
 	itemRepo repository.ItemRepository
+	convRepo repository.ConversationRepository
 }
 
 func New(db *gorm.DB) *Server {
+	if db == nil {
+		panic("db is nil")
+	}
 	e := echo.New()
 	e.HideBanner = true
 	e.Use(middleware.Recover())
@@ -65,7 +69,7 @@ func New(db *gorm.DB) *Server {
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
 
-	return &Server{e: e, itemRepo: itemRepo}
+	return &Server{e: e, itemRepo: itemRepo, convRepo: convRepo}
 }
 
 func (s *Server) Start(addr string) error {
@@ -75,5 +79,8 @@ func (s *Server) Start(addr string) error {
 func (s *Server) SetDB(db *gorm.DB) {
 	if s.itemRepo != nil {
 		s.itemRepo.SetDB(db)
+	}
+	if s.convRepo != nil {
+		s.convRepo = repository.NewConversationRepository(db)
 	}
 }
