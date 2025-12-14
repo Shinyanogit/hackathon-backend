@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
-	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/repository"
 )
 
