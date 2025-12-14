@@ -13,7 +13,7 @@ const (
 
 type Purchase struct {
 	ID             uint64         `gorm:"primaryKey;autoIncrement"`
-	ItemID         uint64         `gorm:"column:item_id;uniqueIndex;not null"`
+	ItemID         uint64         `gorm:"column:item_id;index;not null"`
 	BuyerUID       string         `gorm:"column:buyer_uid;size:128;index;not null"`
 	SellerUID      string         `gorm:"column:seller_uid;size:128;index;not null"`
 	ConversationID uint64         `gorm:"column:conversation_id;index"`

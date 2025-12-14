@@ -178,3 +178,41 @@ func (h *PurchaseHandler) Cancel(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, toPurchaseResponse(p))
 }
+
+type PurchaseWithItemResponse struct {
+	Purchase PurchaseResponse `json:"purchase"`
+	Item     ItemResponse     `json:"item"`
+}
+
+func (h *PurchaseHandler) ListMine(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	list, err := h.svc.ListByBuyer(c.Request().Context(), uid)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch purchases"))
+	}
+	resp := make([]PurchaseWithItemResponse, 0, len(list))
+	for _, row := range list {
+		itemResp := ItemResponse{
+			ID:           row.Purchase.ItemID,
+			Title:        "",
+			Description:  "",
+			Price:        0,
+			ImageURL:     nil,
+			CategorySlug: "",
+			SellerUID:    row.Purchase.SellerUID,
+			CreatedAt:    "",
+			UpdatedAt:    "",
+		}
+		if row.Item != nil {
+			itemResp = toItemResponse(row.Item)
+		}
+		resp = append(resp, PurchaseWithItemResponse{
+			Purchase: toPurchaseResponse(&row.Purchase),
+			Item:     itemResp,
+		})
+	}
+	return c.JSON(http.StatusOK, resp)
+}

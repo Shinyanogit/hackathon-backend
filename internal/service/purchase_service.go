@@ -21,12 +21,18 @@ type PurchaseService interface {
 	MarkShipped(ctx context.Context, purchaseID uint64, sellerUID string) (*model.Purchase, error)
 	MarkDelivered(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error)
 	Cancel(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error)
+	ListByBuyer(ctx context.Context, buyerUID string) ([]PurchaseWithItem, error)
 }
 
 type purchaseService struct {
 	purchaseRepo repository.PurchaseRepository
 	itemRepo     repository.ItemRepository
 	convRepo     repository.ConversationRepository
+}
+
+type PurchaseWithItem struct {
+	Purchase model.Purchase
+	Item     *model.Item
 }
 
 func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo repository.ItemRepository, convRepo repository.ConversationRepository) PurchaseService {
@@ -51,7 +57,9 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 		return nil, errors.New("cannot buy your own item")
 	}
 	if existing, err := s.purchaseRepo.FindByItem(ctx, itemID); err == nil && existing != nil {
-		return existing, ErrAlreadyPurchased
+		if existing.Status != model.PurchaseStatusCanceled {
+			return existing, ErrAlreadyPurchased
+		}
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
@@ -187,4 +195,23 @@ func (s *purchaseService) Cancel(ctx context.Context, purchaseID uint64, buyerUI
 		})
 	}
 	return p, nil
+}
+
+func (s *purchaseService) ListByBuyer(ctx context.Context, buyerUID string) ([]PurchaseWithItem, error) {
+	if buyerUID == "" {
+		return nil, errors.New("buyer is required")
+	}
+	purchases, err := s.purchaseRepo.ListByBuyer(ctx, buyerUID)
+	if err != nil {
+		return nil, err
+	}
+	resp := make([]PurchaseWithItem, 0, len(purchases))
+	for _, p := range purchases {
+		item, _ := s.itemRepo.FindByID(ctx, p.ItemID)
+		resp = append(resp, PurchaseWithItem{
+			Purchase: p,
+			Item:     item,
+		})
+	}
+	return resp, nil
 }

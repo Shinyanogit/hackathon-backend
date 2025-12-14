@@ -12,6 +12,7 @@ type PurchaseRepository interface {
 	FindByItem(ctx context.Context, itemID uint64) (*model.Purchase, error)
 	FindByID(ctx context.Context, id uint64) (*model.Purchase, error)
 	Update(ctx context.Context, p *model.Purchase) error
+	ListByBuyer(ctx context.Context, buyerUID string) ([]model.Purchase, error)
 	SetDB(db *gorm.DB)
 }
 
@@ -31,6 +32,7 @@ func (r *purchaseRepository) FindByItem(ctx context.Context, itemID uint64) (*mo
 	var p model.Purchase
 	if err := r.db.WithContext(ctx).
 		Where("item_id = ?", itemID).
+		Order("id DESC").
 		First(&p).Error; err != nil {
 		return nil, err
 	}
@@ -47,6 +49,17 @@ func (r *purchaseRepository) FindByID(ctx context.Context, id uint64) (*model.Pu
 
 func (r *purchaseRepository) Update(ctx context.Context, p *model.Purchase) error {
 	return r.db.WithContext(ctx).Save(p).Error
+}
+
+func (r *purchaseRepository) ListByBuyer(ctx context.Context, buyerUID string) ([]model.Purchase, error) {
+	var list []model.Purchase
+	if err := r.db.WithContext(ctx).
+		Where("buyer_uid = ?", buyerUID).
+		Order("id DESC").
+		Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (r *purchaseRepository) SetDB(db *gorm.DB) {
