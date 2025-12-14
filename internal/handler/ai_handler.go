@@ -18,13 +18,15 @@ import (
 
 type AIHandler struct {
 	itemRepo repository.ItemRepository
+	convRepo repository.ConversationRepository
 	apiKey   string
 	client   *http.Client
 }
 
-func NewAIHandler(itemRepo repository.ItemRepository, apiKey string) *AIHandler {
+func NewAIHandler(itemRepo repository.ItemRepository, convRepo repository.ConversationRepository, apiKey string) *AIHandler {
 	return &AIHandler{
 		itemRepo: itemRepo,
+		convRepo: convRepo,
 		apiKey:   apiKey,
 		client: &http.Client{
 			Timeout: 15 * time.Second,
@@ -76,20 +78,43 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 		return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "cannot ask about own item"))
 	}
 
+	// recent conversation messages (for context)
+	var conversationText string
+	if h.convRepo != nil {
+		if cv, err := h.convRepo.FindByItem(c.Request().Context(), itemID); err == nil {
+			if msgs, err := h.convRepo.ListMessages(c.Request().Context(), cv.ID); err == nil {
+				if len(msgs) > 10 {
+					msgs = msgs[len(msgs)-10:]
+				}
+				var b strings.Builder
+				for _, m := range msgs {
+					fmt.Fprintf(&b, "[%s] %s\n", m.SenderUID, m.Body)
+				}
+				conversationText = b.String()
+			}
+		}
+	}
+
+	parts := []map[string]string{
+		{
+			"text": "You are a helpful shopping assistant for a flea market app. Answer concisely in Japanese. If the question is unrelated, politely guide the user back to the item.",
+		},
+		{
+			"text": fmt.Sprintf("商品データ:\nタイトル: %s\n説明: %s\n価格: %d\nカテゴリ: %s", item.Title, item.Description, item.Price, item.CategorySlug),
+		},
+		{
+			"text": fmt.Sprintf("質問: %s", req.Question),
+		},
+	}
+	if conversationText != "" {
+		parts = append(parts, map[string]string{
+			"text": fmt.Sprintf("最近のDM:\n%s", conversationText),
+		})
+	}
 	payload := map[string]interface{}{
 		"contents": []map[string]interface{}{
 			{
-				"parts": []map[string]string{
-					{
-						"text": "You are a helpful shopping assistant for a flea market app. Answer concisely in Japanese. If the question is unrelated, politely guide the user back to the item.",
-					},
-					{
-						"text": fmt.Sprintf("商品データ:\nタイトル: %s\n説明: %s\n価格: %d\nカテゴリ: %s", item.Title, item.Description, item.Price, item.CategorySlug),
-					},
-					{
-						"text": fmt.Sprintf("質問: %s", req.Question),
-					},
-				},
+				"parts": parts,
 			},
 		},
 		"generationConfig": map[string]interface{}{

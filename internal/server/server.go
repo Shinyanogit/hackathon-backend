@@ -67,7 +67,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo)
 	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
 
-	aiHandler := handler.NewAIHandler(itemRepo, os.Getenv("GEMINI_API_KEY"))
+	aiHandler := handler.NewAIHandler(itemRepo, convRepo, os.Getenv("GEMINI_API_KEY"))
 
 	authMw, err := appmw.NewAuthMiddleware(context.Background())
 	if err != nil {
