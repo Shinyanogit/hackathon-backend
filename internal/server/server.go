@@ -65,6 +65,10 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	if err != nil {
 		e.Logger.Fatalf("failed to init firebase auth: %v", err)
 	}
+	var userHandler *handler.UserHandler
+	if authMw != nil && authMw.Client() != nil {
+		userHandler = handler.NewUserHandler(authMw.Client())
+	}
 
 	e.GET("/healthz", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
@@ -104,6 +108,9 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
+	if userHandler != nil {
+		api.GET("/users/:uid/public", userHandler.GetPublic)
+	}
 
 	return &Server{e: e, itemRepo: itemRepo, convRepo: convRepo, sha: sha, build: buildTime}
 }

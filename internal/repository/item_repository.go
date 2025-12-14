@@ -11,7 +11,7 @@ import (
 type ItemRepository interface {
 	Create(ctx context.Context, item *model.Item) error
 	FindByID(ctx context.Context, id uint64) (*model.Item, error)
-	List(ctx context.Context, limit, offset int, categorySlug, query string) ([]model.Item, int64, error)
+	List(ctx context.Context, limit, offset int, categorySlug, query, sellerUID string) ([]model.Item, int64, error)
 	FindByImageURL(ctx context.Context, imageURL string) (*model.Item, error)
 	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
 	UpdateBySeller(ctx context.Context, id uint64, sellerUID string, fields map[string]interface{}) error
@@ -38,7 +38,7 @@ func (r *itemRepository) FindByID(ctx context.Context, id uint64) (*model.Item, 
 	return &item, nil
 }
 
-func (r *itemRepository) List(ctx context.Context, limit, offset int, categorySlug, query string) ([]model.Item, int64, error) {
+func (r *itemRepository) List(ctx context.Context, limit, offset int, categorySlug, query, sellerUID string) ([]model.Item, int64, error) {
 	var (
 		items []model.Item
 		total int64
@@ -46,6 +46,9 @@ func (r *itemRepository) List(ctx context.Context, limit, offset int, categorySl
 	q := r.db.WithContext(ctx).Model(&model.Item{})
 	if categorySlug != "" {
 		q = q.Where("category_slug = ?", categorySlug)
+	}
+	if sellerUID != "" {
+		q = q.Where("seller_uid = ?", sellerUID)
 	}
 	if query != "" {
 		like := "%" + query + "%"

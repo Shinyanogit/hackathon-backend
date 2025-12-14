@@ -46,3 +46,7 @@ func (m *AuthMiddleware) RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
 		return next(c)
 	}
 }
+
+func (m *AuthMiddleware) Client() *auth.Client {
+	return m.authClient
+}

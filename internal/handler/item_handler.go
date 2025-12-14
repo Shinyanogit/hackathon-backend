@@ -78,7 +78,8 @@ func (h *ItemHandler) List(c echo.Context) error {
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
 	category := c.QueryParam("category")
 	query := c.QueryParam("query")
-	items, total, err := h.svc.List(c.Request().Context(), limit, offset, category, query)
+	sellerUID := c.QueryParam("sellerUid")
+	items, total, err := h.svc.List(c.Request().Context(), limit, offset, category, query, sellerUID)
 	if err != nil {
 		c.Logger().Errorf("list items error: %v", err)
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch items"))
