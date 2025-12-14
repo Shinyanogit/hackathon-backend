@@ -103,6 +103,9 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
+		var buf bytes.Buffer
+		_, _ = io.CopyN(&buf, resp.Body, 2048)
+		log.Printf("gemini upstream error: status=%d url=%s body=%q", resp.StatusCode, endpoint, buf.String())
 		return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", "gemini returned error"))
 	}
 	var gResp geminiResponse
