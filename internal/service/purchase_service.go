@@ -20,6 +20,7 @@ type PurchaseService interface {
 	GetByItem(ctx context.Context, itemID uint64, uid string) (*model.Purchase, error)
 	MarkShipped(ctx context.Context, purchaseID uint64, sellerUID string) (*model.Purchase, error)
 	MarkDelivered(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error)
+	Cancel(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error)
 }
 
 type purchaseService struct {
@@ -152,6 +153,37 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 			SenderUID:      buyerUID,
 			SenderName:     "購入者",
 			Body:           "商品を受け取りました。ありがとうございました！",
+		})
+	}
+	return p, nil
+}
+
+func (s *purchaseService) Cancel(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error) {
+	p, err := s.purchaseRepo.FindByID(ctx, purchaseID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if p.BuyerUID != buyerUID {
+		return nil, ErrForbidden
+	}
+	if p.Status != model.PurchaseStatusPendingShipment {
+		return nil, errors.New("cannot cancel after shipment")
+	}
+	p.Status = model.PurchaseStatusCanceled
+	p.DeliveredAt = nil
+	p.ShippedAt = nil
+	if err := s.purchaseRepo.Update(ctx, p); err != nil {
+		return nil, err
+	}
+	if p.ConversationID != 0 {
+		_ = s.convRepo.CreateMessage(ctx, &model.Message{
+			ConversationID: p.ConversationID,
+			SenderUID:      buyerUID,
+			SenderName:     "購入者",
+			Body:           "購入をキャンセルしました。",
 		})
 	}
 	return p, nil

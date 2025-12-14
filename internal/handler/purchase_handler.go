@@ -154,3 +154,27 @@ func (h *PurchaseHandler) MarkDelivered(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, toPurchaseResponse(p))
 }
+
+func (h *PurchaseHandler) Cancel(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	idParam := c.Param("id")
+	purchaseID, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid purchase id"))
+	}
+	p, err := h.svc.Cancel(c.Request().Context(), purchaseID, uid)
+	if err != nil {
+		switch err {
+		case service.ErrNotFound:
+			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "purchase not found"))
+		case service.ErrForbidden:
+			return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not allowed"))
+		default:
+			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+		}
+	}
+	return c.JSON(http.StatusOK, toPurchaseResponse(p))
+}

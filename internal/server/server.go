@@ -101,6 +101,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/conversations/:id/read", convHandler.MarkRead, authMw.RequireAuth)
 		api.POST("/purchases/:id/ship", purchaseHandler.MarkShipped, authMw.RequireAuth)
 		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered, authMw.RequireAuth)
+		api.POST("/purchases/:id/cancel", purchaseHandler.Cancel, authMw.RequireAuth)
 	} else {
 		api.POST("/items", itemHandler.Create)
 		api.PUT("/items/:id", itemHandler.Update)
@@ -118,6 +119,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/conversations/:id/read", convHandler.MarkRead)
 		api.POST("/purchases/:id/ship", purchaseHandler.MarkShipped)
 		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered)
+		api.POST("/purchases/:id/cancel", purchaseHandler.Cancel)
 	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)

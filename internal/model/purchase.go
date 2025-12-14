@@ -8,6 +8,7 @@ const (
 	PurchaseStatusPendingShipment PurchaseStatus = "pending_shipment"
 	PurchaseStatusShipped         PurchaseStatus = "shipped"
 	PurchaseStatusDelivered       PurchaseStatus = "delivered"
+	PurchaseStatusCanceled        PurchaseStatus = "canceled"
 )
 
 type Purchase struct {
