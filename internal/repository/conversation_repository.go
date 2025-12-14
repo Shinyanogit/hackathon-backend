@@ -18,6 +18,7 @@ type ConversationRepository interface {
 	UpsertState(ctx context.Context, convID uint64, uid string) error
 	HasUnread(ctx context.Context, convID uint64, uid string, lastMessageID uint64) (bool, error)
 	LastMessage(ctx context.Context, convID uint64) (*model.Message, error)
+	DeleteMessage(ctx context.Context, convID uint64, msgID uint64, uid string) error
 }
 
 type conversationRepository struct {
@@ -115,4 +116,17 @@ func (r *conversationRepository) HasUnread(ctx context.Context, convID uint64, u
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func (r *conversationRepository) DeleteMessage(ctx context.Context, convID uint64, msgID uint64, uid string) error {
+	res := r.db.WithContext(ctx).
+		Where("id = ? AND conversation_id = ? AND sender_uid = ?", msgID, convID, uid).
+		Delete(&model.Message{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

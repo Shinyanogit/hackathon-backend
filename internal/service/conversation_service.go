@@ -16,6 +16,7 @@ type ConversationService interface {
 	ListMessages(ctx context.Context, convID uint64, uid string) ([]model.Message, error)
 	CreateMessage(ctx context.Context, convID uint64, uid, body, senderName string, senderIconURL *string) error
 	MarkRead(ctx context.Context, convID uint64, uid string) error
+	DeleteMessage(ctx context.Context, convID uint64, msgID uint64, uid string) error
 }
 
 type ConversationWithUnread struct {
@@ -133,4 +134,18 @@ func (s *conversationService) CreateMessage(ctx context.Context, convID uint64, 
 
 func (s *conversationService) MarkRead(ctx context.Context, convID uint64, uid string) error {
 	return s.convRepo.UpsertState(ctx, convID, uid)
+}
+
+func (s *conversationService) DeleteMessage(ctx context.Context, convID uint64, msgID uint64, uid string) error {
+	cv, err := s.convRepo.FindByID(ctx, convID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if cv.BuyerUID != uid && cv.SellerUID != uid {
+		return errors.New("forbidden")
+	}
+	return s.convRepo.DeleteMessage(ctx, convID, msgID, uid)
 }

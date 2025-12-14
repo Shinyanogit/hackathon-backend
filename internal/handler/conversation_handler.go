@@ -6,6 +6,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/shinyyama/hackathon-backend/internal/service"
+	"gorm.io/gorm"
 )
 
 type ConversationHandler struct {
@@ -28,6 +29,10 @@ type MessageRequest struct {
 	Body          string  `json:"body"`
 	SenderName    string  `json:"senderName"`
 	SenderIconUrl *string `json:"senderIconUrl"`
+}
+
+type DeleteMessageRequest struct {
+	MessageID uint64 `json:"messageId"`
 }
 
 func (h *ConversationHandler) CreateFromItem(c echo.Context) error {
@@ -171,4 +176,31 @@ func (h *ConversationHandler) CreateMessage(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
 	}
 	return c.JSON(http.StatusCreated, map[string]string{"status": "ok"})
+}
+
+func (h *ConversationHandler) DeleteMessage(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	convIDParam := c.Param("id")
+	msgIDParam := c.Param("msgId")
+	convID, err := strconv.ParseUint(convIDParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid conversation id"))
+	}
+	msgID, err := strconv.ParseUint(msgIDParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid message id"))
+	}
+	if err := h.svc.DeleteMessage(c.Request().Context(), convID, msgID, uid); err != nil {
+		if err == service.ErrNotFound || err.Error() == gorm.ErrRecordNotFound.Error() {
+			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "message not found"))
+		}
+		if err.Error() == "forbidden" {
+			return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not allowed"))
+		}
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to delete message"))
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
