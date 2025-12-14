@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("db connect error: %v", err)
 	}
-	if err := conn.AutoMigrate(&model.Item{}, &model.Conversation{}, &model.Message{}); err != nil {
+	if err := conn.AutoMigrate(&model.Item{}, &model.Conversation{}, &model.Message{}, &model.ConversationState{}); err != nil {
 		log.Fatalf("auto migrate error: %v", err)
 	}
 

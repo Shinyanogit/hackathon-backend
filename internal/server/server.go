@@ -62,6 +62,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.GET("/conversations/:id", convHandler.Get, authMw.RequireAuth)
 		api.GET("/conversations/:id/messages", convHandler.ListMessages, authMw.RequireAuth)
 		api.POST("/conversations/:id/messages", convHandler.CreateMessage, authMw.RequireAuth)
+		api.POST("/conversations/:id/read", convHandler.MarkRead, authMw.RequireAuth)
 	} else {
 		api.POST("/items", itemHandler.Create)
 		api.GET("/me/items", itemHandler.ListMine)
@@ -70,6 +71,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.GET("/conversations/:id", convHandler.Get)
 		api.GET("/conversations/:id/messages", convHandler.ListMessages)
 		api.POST("/conversations/:id/messages", convHandler.CreateMessage)
+		api.POST("/conversations/:id/read", convHandler.MarkRead)
 	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)

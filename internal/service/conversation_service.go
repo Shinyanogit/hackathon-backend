@@ -11,10 +11,17 @@ import (
 
 type ConversationService interface {
 	CreateOrGet(ctx context.Context, itemID uint64, buyerUID string) (*model.Conversation, error)
-	ListByUser(ctx context.Context, uid string) ([]model.Conversation, error)
+	ListByUser(ctx context.Context, uid string) ([]ConversationWithUnread, error)
 	Get(ctx context.Context, convID uint64, uid string) (*model.Conversation, error)
 	ListMessages(ctx context.Context, convID uint64, uid string) ([]model.Message, error)
 	CreateMessage(ctx context.Context, convID uint64, uid, body, senderName string, senderIconURL *string) error
+	MarkRead(ctx context.Context, convID uint64, uid string) error
+}
+
+type ConversationWithUnread struct {
+	model.Conversation
+	HasUnread bool   `json:"hasUnread"`
+	LastMsgID uint64 `json:"lastMessageId"`
 }
 
 type conversationService struct {
@@ -43,8 +50,33 @@ func (s *conversationService) CreateOrGet(ctx context.Context, itemID uint64, bu
 	return s.convRepo.FindOrCreate(ctx, itemID, item.SellerUID, buyerUID)
 }
 
-func (s *conversationService) ListByUser(ctx context.Context, uid string) ([]model.Conversation, error) {
-	return s.convRepo.FindByUser(ctx, uid)
+func (s *conversationService) ListByUser(ctx context.Context, uid string) ([]ConversationWithUnread, error) {
+	convs, err := s.convRepo.FindByUser(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	resp := make([]ConversationWithUnread, 0, len(convs))
+	for _, cv := range convs {
+		last, err := s.convRepo.LastMessage(ctx, cv.ID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		hasUnread := false
+		var lastID uint64
+		if last != nil {
+			lastID = last.ID
+			hasUnread, err = s.convRepo.HasUnread(ctx, cv.ID, uid, last.ID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		resp = append(resp, ConversationWithUnread{
+			Conversation: cv,
+			HasUnread:    hasUnread,
+			LastMsgID:    lastID,
+		})
+	}
+	return resp, nil
 }
 
 func (s *conversationService) Get(ctx context.Context, convID uint64, uid string) (*model.Conversation, error) {
@@ -97,4 +129,8 @@ func (s *conversationService) CreateMessage(ctx context.Context, convID uint64, 
 		SenderIconURL:  senderIconURL,
 	}
 	return s.convRepo.CreateMessage(ctx, msg)
+}
+
+func (s *conversationService) MarkRead(ctx context.Context, convID uint64, uid string) error {
+	return s.convRepo.UpsertState(ctx, convID, uid)
 }

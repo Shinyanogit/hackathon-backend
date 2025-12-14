@@ -21,6 +21,7 @@ type ConversationResponse struct {
 	ItemID         uint64 `json:"itemId"`
 	SellerUID      string `json:"sellerUid"`
 	BuyerUID       string `json:"buyerUid"`
+	HasUnread      bool   `json:"hasUnread,omitempty"`
 }
 
 type MessageRequest struct {
@@ -73,6 +74,7 @@ func (h *ConversationHandler) List(c echo.Context) error {
 			ItemID:         cv.ItemID,
 			SellerUID:      cv.SellerUID,
 			BuyerUID:       cv.BuyerUID,
+			HasUnread:      cv.HasUnread,
 		})
 	}
 	return c.JSON(http.StatusOK, resp)
@@ -104,6 +106,22 @@ func (h *ConversationHandler) Get(c echo.Context) error {
 		SellerUID:      cv.SellerUID,
 		BuyerUID:       cv.BuyerUID,
 	})
+}
+
+func (h *ConversationHandler) MarkRead(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	convIDParam := c.Param("id")
+	convID, err := strconv.ParseUint(convIDParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid conversation id"))
+	}
+	if err := h.svc.MarkRead(c.Request().Context(), convID, uid); err != nil {
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to mark read"))
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *ConversationHandler) ListMessages(c echo.Context) error {
