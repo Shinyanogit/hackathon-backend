@@ -76,7 +76,11 @@ func main() {
 	defer sqlDB.Close()
 
 	log.Printf("gemini model: %s", cfg.GeminiModel)
-	log.Printf("gemini endpoint: https://generativelanguage.googleapis.com/v1beta/%s:generateContent", cfg.GeminiModel)
+	if strings.HasPrefix(strings.TrimPrefix(cfg.GeminiModel, "models/"), "imagen-") {
+		log.Printf("gemini endpoint: https://generativelanguage.googleapis.com/v1beta/models/%s:predict", strings.TrimPrefix(cfg.GeminiModel, "models/"))
+	} else {
+		log.Printf("gemini endpoint: https://generativelanguage.googleapis.com/v1beta/%s:generateContent", cfg.GeminiModel)
+	}
 	log.Printf("gemini api key set: %v", cfg.GeminiAPIKey != "")
 
 	if err := db.AutoMigrate(&model.Item{}); err != nil {
@@ -145,6 +149,14 @@ func connectDB(cfg Config) (*gorm.DB, error) {
 }
 
 func generateImage(ctx context.Context, apiKey, model string, p Prompt) ([]byte, error) {
+	if strings.HasPrefix(model, "models/") {
+		model = strings.TrimPrefix(model, "models/")
+	}
+
+	if strings.HasPrefix(model, "imagen-") {
+		return generateImageWithImagen(ctx, apiKey, model, p.Prompt)
+	}
+
 	reqBody := map[string]interface{}{
 		"contents": []map[string]interface{}{
 			{
@@ -193,6 +205,49 @@ func generateImage(ctx context.Context, apiKey, model string, p Prompt) ([]byte,
 	}
 
 	return nil, errors.New("no inlineData found in gemini response")
+}
+
+func generateImageWithImagen(ctx context.Context, apiKey, model, prompt string) ([]byte, error) {
+	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:predict", url.PathEscape(model))
+	reqBody := map[string]interface{}{
+		"instances": []map[string]string{
+			{"prompt": prompt},
+		},
+		"parameters": map[string]interface{}{
+			"sampleCount": 1,
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("gemini/imagen status %d: %s", resp.StatusCode, string(b))
+	}
+
+	var parsed struct {
+		Predictions []struct {
+			BytesBase64Encoded string `json:"bytesBase64Encoded"`
+		} `json:"predictions"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, err
+	}
+	if len(parsed.Predictions) == 0 || parsed.Predictions[0].BytesBase64Encoded == "" {
+		return nil, errors.New("no predictions data found")
+	}
+	return base64.StdEncoding.DecodeString(parsed.Predictions[0].BytesBase64Encoded)
 }
 
 func fetchPlaceholder(ctx context.Context, seed string) ([]byte, error) {
