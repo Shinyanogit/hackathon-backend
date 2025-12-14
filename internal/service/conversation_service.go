@@ -172,6 +172,9 @@ func (s *conversationService) PostMessageToItem(ctx context.Context, itemID uint
 	if text == "" {
 		return nil, nil, errors.New("text is required")
 	}
+	if senderName == "" {
+		senderName = uid
+	}
 	item, err := s.itemRepo.FindByID(ctx, itemID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

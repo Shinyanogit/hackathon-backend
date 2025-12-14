@@ -227,6 +227,8 @@ type ThreadMessage struct {
 type PostMessageRequest struct {
 	Text            string  `json:"text"`
 	ParentMessageID *uint64 `json:"parentMessageId"`
+	SenderName      string  `json:"senderName"`
+	SenderIconURL   *string `json:"senderIconUrl"`
 }
 
 func toThreadMessage(m model.Message) ThreadMessage {
@@ -281,7 +283,7 @@ func (h *ConversationHandler) PostMessageToItem(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
 	}
-	msg, cv, err := h.svc.PostMessageToItem(c.Request().Context(), itemID, uid, req.Text, "", nil, req.ParentMessageID)
+	msg, cv, err := h.svc.PostMessageToItem(c.Request().Context(), itemID, uid, req.Text, req.SenderName, req.SenderIconURL, req.ParentMessageID)
 	if err != nil {
 		switch err.Error() {
 		case "seller cannot create root message":
