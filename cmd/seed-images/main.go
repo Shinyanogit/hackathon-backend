@@ -124,8 +124,16 @@ func main() {
 }
 
 func connectDB(cfg Config) (*gorm.DB, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Local",
-		cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName)
+	var dsn string
+	if strings.HasPrefix(cfg.DBHost, "/cloudsql/") {
+		log.Printf("db connect via unix socket: %s", cfg.DBHost)
+		dsn = fmt.Sprintf("%s:%s@unix(%s)/%s?parseTime=true&charset=utf8mb4&loc=Local",
+			cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBName)
+	} else {
+		log.Printf("db connect via tcp: %s:%s", cfg.DBHost, cfg.DBPort)
+		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Local",
+			cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName)
+	}
 	return gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
