@@ -3,8 +3,10 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/service"
 	"gorm.io/gorm"
 )
@@ -203,4 +205,98 @@ func (h *ConversationHandler) DeleteMessage(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to delete message"))
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type ThreadResponse struct {
+	ConversationID *uint64         `json:"conversationId"`
+	Messages       []ThreadMessage `json:"messages"`
+}
+
+type ThreadMessage struct {
+	ID              uint64  `json:"id"`
+	ConversationID  uint64  `json:"conversationId"`
+	SenderUID       string  `json:"senderUid"`
+	SenderName      string  `json:"senderName"`
+	SenderIconURL   *string `json:"senderIconUrl,omitempty"`
+	ParentMessageID *uint64 `json:"parentMessageId,omitempty"`
+	Depth           int     `json:"depth"`
+	Body            string  `json:"body"`
+	CreatedAt       string  `json:"createdAt"`
+}
+
+type PostMessageRequest struct {
+	Text            string  `json:"text"`
+	ParentMessageID *uint64 `json:"parentMessageId"`
+}
+
+func toThreadMessage(m model.Message) ThreadMessage {
+	return ThreadMessage{
+		ID:              m.ID,
+		ConversationID:  m.ConversationID,
+		SenderUID:       m.SenderUID,
+		SenderName:      m.SenderName,
+		SenderIconURL:   m.SenderIconURL,
+		ParentMessageID: m.ParentMessageID,
+		Depth:           m.Depth,
+		Body:            m.Body,
+		CreatedAt:       m.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+func (h *ConversationHandler) GetThread(c echo.Context) error {
+	itemIDParam := c.Param("id")
+	itemID, err := strconv.ParseUint(itemIDParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid item id"))
+	}
+	cv, msgs, err := h.svc.ThreadByItem(c.Request().Context(), itemID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch thread"))
+	}
+	resp := ThreadResponse{
+		ConversationID: nil,
+		Messages:       make([]ThreadMessage, 0, len(msgs)),
+	}
+	if cv != nil {
+		id := cv.ID
+		resp.ConversationID = &id
+	}
+	for _, m := range msgs {
+		resp.Messages = append(resp.Messages, toThreadMessage(m))
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+func (h *ConversationHandler) PostMessageToItem(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	itemIDParam := c.Param("id")
+	itemID, err := strconv.ParseUint(itemIDParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid item id"))
+	}
+	var req PostMessageRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
+	}
+	msg, cv, err := h.svc.PostMessageToItem(c.Request().Context(), itemID, uid, req.Text, "", nil, req.ParentMessageID)
+	if err != nil {
+		switch err.Error() {
+		case "seller cannot create root message":
+			return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", err.Error()))
+		case "depth exceeded", "parent not found", "parent not in conversation", "text is required":
+			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+		}
+		if err == service.ErrNotFound {
+			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found"))
+		}
+		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to post message"))
+	}
+	resp := toThreadMessage(*msg)
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"conversationId": cv.ID,
+		"message":        resp,
+	})
 }

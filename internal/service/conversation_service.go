@@ -17,6 +17,8 @@ type ConversationService interface {
 	CreateMessage(ctx context.Context, convID uint64, uid, body, senderName string, senderIconURL *string) error
 	MarkRead(ctx context.Context, convID uint64, uid string) error
 	DeleteMessage(ctx context.Context, convID uint64, msgID uint64, uid string) error
+	ThreadByItem(ctx context.Context, itemID uint64) (*model.Conversation, []model.Message, error)
+	PostMessageToItem(ctx context.Context, itemID uint64, uid, text, senderName string, senderIconURL *string, parentID *uint64) (*model.Message, *model.Conversation, error)
 }
 
 type ConversationWithUnread struct {
@@ -148,4 +150,71 @@ func (s *conversationService) DeleteMessage(ctx context.Context, convID uint64, 
 		return errors.New("forbidden")
 	}
 	return s.convRepo.DeleteMessage(ctx, convID, msgID, uid)
+}
+
+func (s *conversationService) ThreadByItem(ctx context.Context, itemID uint64) (*model.Conversation, []model.Message, error) {
+	cv, err := s.convRepo.FindByItem(ctx, itemID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, []model.Message{}, nil
+		}
+		return nil, nil, err
+	}
+	msgs, err := s.convRepo.ListMessages(ctx, cv.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cv, msgs, nil
+}
+
+func (s *conversationService) PostMessageToItem(ctx context.Context, itemID uint64, uid, text, senderName string, senderIconURL *string, parentID *uint64) (*model.Message, *model.Conversation, error) {
+	const maxDepth = 3
+	if text == "" {
+		return nil, nil, errors.New("text is required")
+	}
+	item, err := s.itemRepo.FindByID(ctx, itemID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil, ErrNotFound
+		}
+		return nil, nil, err
+	}
+	cv, err := s.convRepo.FindOrCreateByItem(ctx, itemID, item.SellerUID)
+	if err != nil {
+		return nil, nil, err
+	}
+	msg := &model.Message{
+		ConversationID: cv.ID,
+		SenderUID:      uid,
+		SenderName:     senderName,
+		SenderIconURL:  senderIconURL,
+	}
+	if parentID != nil {
+		parent, err := s.convRepo.FindMessage(ctx, *parentID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil, errors.New("parent not found")
+			}
+			return nil, nil, err
+		}
+		if parent.ConversationID != cv.ID {
+			return nil, nil, errors.New("parent not in conversation")
+		}
+		msg.ParentMessageID = parentID
+		msg.Depth = parent.Depth + 1
+		if msg.Depth > maxDepth {
+			return nil, nil, errors.New("depth exceeded")
+		}
+	} else {
+		// root投稿は出品者は禁止
+		if uid == item.SellerUID {
+			return nil, nil, errors.New("seller cannot create root message")
+		}
+		msg.Depth = 0
+	}
+	msg.Body = text
+	if err := s.convRepo.CreateMessage(ctx, msg); err != nil {
+		return nil, nil, err
+	}
+	return msg, cv, nil
 }

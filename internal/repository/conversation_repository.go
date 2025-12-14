@@ -11,10 +11,13 @@ import (
 
 type ConversationRepository interface {
 	FindOrCreate(ctx context.Context, itemID uint64, sellerUID, buyerUID string) (*model.Conversation, error)
+	FindOrCreateByItem(ctx context.Context, itemID uint64, sellerUID string) (*model.Conversation, error)
 	FindByUser(ctx context.Context, uid string) ([]model.Conversation, error)
 	FindByID(ctx context.Context, id uint64) (*model.Conversation, error)
+	FindByItem(ctx context.Context, itemID uint64) (*model.Conversation, error)
 	CreateMessage(ctx context.Context, msg *model.Message) error
 	ListMessages(ctx context.Context, convID uint64) ([]model.Message, error)
+	FindMessage(ctx context.Context, msgID uint64) (*model.Message, error)
 	UpsertState(ctx context.Context, convID uint64, uid string) error
 	HasUnread(ctx context.Context, convID uint64, uid string, lastMessageID uint64) (bool, error)
 	LastMessage(ctx context.Context, convID uint64) (*model.Message, error)
@@ -53,6 +56,26 @@ func (r *conversationRepository) FindByUser(ctx context.Context, uid string) ([]
 func (r *conversationRepository) FindByID(ctx context.Context, id uint64) (*model.Conversation, error) {
 	var cv model.Conversation
 	if err := r.db.WithContext(ctx).First(&cv, id).Error; err != nil {
+		return nil, err
+	}
+	return &cv, nil
+}
+
+func (r *conversationRepository) FindByItem(ctx context.Context, itemID uint64) (*model.Conversation, error) {
+	var cv model.Conversation
+	if err := r.db.WithContext(ctx).
+		Where("item_id = ?", itemID).
+		First(&cv).Error; err != nil {
+		return nil, err
+	}
+	return &cv, nil
+}
+
+func (r *conversationRepository) FindOrCreateByItem(ctx context.Context, itemID uint64, sellerUID string) (*model.Conversation, error) {
+	cv := model.Conversation{ItemID: itemID, SellerUID: sellerUID}
+	if err := r.db.WithContext(ctx).
+		Where("item_id = ?", itemID).
+		FirstOrCreate(&cv).Error; err != nil {
 		return nil, err
 	}
 	return &cv, nil
@@ -129,4 +152,12 @@ func (r *conversationRepository) DeleteMessage(ctx context.Context, convID uint6
 		return gorm.ErrRecordNotFound
 	}
 	return nil
+}
+
+func (r *conversationRepository) FindMessage(ctx context.Context, msgID uint64) (*model.Message, error) {
+	var msg model.Message
+	if err := r.db.WithContext(ctx).First(&msg, msgID).Error; err != nil {
+		return nil, err
+	}
+	return &msg, nil
 }
