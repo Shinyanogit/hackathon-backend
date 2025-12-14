@@ -139,14 +139,17 @@ func (s *conversationService) MarkRead(ctx context.Context, convID uint64, uid s
 }
 
 func (s *conversationService) DeleteMessage(ctx context.Context, convID uint64, msgID uint64, uid string) error {
-	cv, err := s.convRepo.FindByID(ctx, convID)
+	msg, err := s.convRepo.FindMessage(ctx, msgID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ErrNotFound
 		}
 		return err
 	}
-	if cv.BuyerUID != uid && cv.SellerUID != uid {
+	if msg.ConversationID != convID {
+		return ErrNotFound
+	}
+	if msg.SenderUID != uid {
 		return errors.New("forbidden")
 	}
 	return s.convRepo.DeleteMessage(ctx, convID, msgID, uid)
