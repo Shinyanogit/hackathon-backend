@@ -7,8 +7,10 @@ import (
 	"os"
 	"strings"
 
+	"cloud.google.com/go/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/shinyyama/hackathon-backend/internal/ai"
 	"github.com/shinyyama/hackathon-backend/internal/handler"
 	appmw "github.com/shinyyama/hackathon-backend/internal/middleware"
 	"github.com/shinyyama/hackathon-backend/internal/repository"
@@ -67,7 +69,23 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo)
 	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
 
-	aiHandler := handler.NewAIHandler(itemRepo, convRepo, os.Getenv("GEMINI_API_KEY"))
+	var storageClient *storage.Client
+	if os.Getenv("STORAGE_BUCKET") != "" {
+		if c, err := storage.NewClient(context.Background()); err != nil {
+			e.Logger.Warnf("failed to init storage client: %v", err)
+		} else {
+			storageClient = c
+		}
+	}
+	geminiAPIKey := os.Getenv("GEMINI_API_KEY")
+	aiHandler := handler.NewAIHandler(
+		itemRepo,
+		convRepo,
+		geminiAPIKey,
+		ai.NewGeminiImageClient(geminiAPIKey, os.Getenv("GEMINI_IMAGE_MODEL"), nil),
+		storageClient,
+		os.Getenv("STORAGE_BUCKET"),
+	)
 
 	authMw, err := appmw.NewAuthMiddleware(context.Background())
 	if err != nil {
@@ -108,6 +126,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/purchases/:id/ship", purchaseHandler.MarkShipped, authMw.RequireAuth)
 		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered, authMw.RequireAuth)
 		api.POST("/purchases/:id/cancel", purchaseHandler.Cancel, authMw.RequireAuth)
+		api.POST("/ai/image-enhance", aiHandler.EnhanceImage, authMw.RequireAuth)
 	} else {
 		api.POST("/items", itemHandler.Create)
 		api.PUT("/items/:id", itemHandler.Update)
@@ -129,6 +148,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/purchases/:id/ship", purchaseHandler.MarkShipped)
 		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered)
 		api.POST("/purchases/:id/cancel", purchaseHandler.Cancel)
+		api.POST("/ai/image-enhance", aiHandler.EnhanceImage)
 	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)
