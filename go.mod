@@ -1,6 +1,6 @@
 module github.com/shinyyama/hackathon-backend
 
-go 1.24
+go 1.23.0
 
 require (
 	cloud.google.com/go/storage v1.43.0
@@ -11,7 +11,7 @@ require (
 	github.com/labstack/echo/v4 v4.13.4
 	golang.org/x/oauth2 v0.23.0
 	google.golang.org/api v0.197.0
-	google.golang.org/genai v1.39.0
+	google.golang.org/genai v1.20.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
 )
