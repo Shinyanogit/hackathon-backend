@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -231,7 +233,10 @@ func (h *ItemHandler) EstimateCO2(c echo.Context) error {
 			if err.Error() == "forbidden" {
 				return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not owner"))
 			}
-			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+			if err.Error() == "timeout" || errors.Is(err, context.DeadlineExceeded) {
+				return c.JSON(http.StatusGatewayTimeout, NewErrorResponse("gateway_timeout", "estimation timed out"))
+			}
+			return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", err.Error()))
 		}
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{"co2Kg": val})

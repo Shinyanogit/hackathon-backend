@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -190,14 +191,19 @@ func (s *itemService) EstimateCO2(ctx context.Context, id uint64, sellerUID stri
 	if item.ImageURL == nil || strings.TrimSpace(*item.ImageURL) == "" {
 		return nil, errors.New("image is required for estimation")
 	}
-	ctxShort, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctxShort, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	val, err := s.co2Estimator.Estimate(ctxShort, item.Title, item.Description, *item.ImageURL)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, fmt.Errorf("timeout")
+		}
 		return nil, err
 	}
+	dbStart := time.Now()
 	if err := s.repo.UpdateCO2Force(ctxShort, id, &val); err != nil {
 		return nil, err
 	}
+	log.Printf("[co2] db update took %v", time.Since(dbStart))
 	return &val, nil
 }

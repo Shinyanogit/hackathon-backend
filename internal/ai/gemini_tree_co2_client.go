@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"google.golang.org/genai"
+	"log"
 )
 
 type TreeCO2Client struct {
@@ -21,8 +22,8 @@ func NewTreeCO2Client(httpClient *http.Client) *TreeCO2Client {
 	if model == "" {
 		model = "gemini-2.5-flash"
 	}
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 5 * time.Second}
+’	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 20 * time.Second}
 	}
 	return &TreeCO2Client{model: model, httpClient: httpClient}
 }
@@ -32,10 +33,12 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 	if imageURL == "" {
 		return 0, fmt.Errorf("image url required")
 	}
+	start := time.Now()
 	img, mime, err := c.fetchImage(ctx, imageURL)
 	if err != nil {
 		return 0, err
 	}
+	fetchDur := time.Since(start)
 	client, err := genai.NewClient(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -65,14 +68,17 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 	config := &genai.GenerateContentConfig{
 		Temperature: &temp,
 	}
+	genStart := time.Now()
 	res, err := client.Models.GenerateContent(ctx, c.model, contents, config)
 	if err != nil {
 		return 0, err
 	}
+	genDur := time.Since(genStart)
 	val, err := ParseCO2(res.Text())
 	if err != nil {
 		return 0, err
 	}
+	log.Printf("[co2] image fetch=%v gen=%v total=%v", fetchDur, genDur, time.Since(start))
 	return val, nil
 }
 
