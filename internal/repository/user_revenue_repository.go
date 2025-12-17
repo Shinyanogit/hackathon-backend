@@ -39,8 +39,8 @@ func (r *userRevenueRepository) Add(ctx context.Context, uid string, yen int64) 
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "uid"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
-			"revenue_balance_yen": gorm.Expr("revenue_balance_yen + ?", yen),
-			"revenue_total_yen":   gorm.Expr("revenue_total_yen + ?", yen),
+			"revenue_balance_yen": gorm.Expr("COALESCE(revenue_balance_yen,0) + ?", yen),
+			"revenue_total_yen":   gorm.Expr("COALESCE(revenue_total_yen,0) + ?", yen),
 		}),
 	}).Create(&UserWallet{UID: uid, BalanceYen: yen, TotalYen: yen}).Error
 }
@@ -51,9 +51,9 @@ func (r *userRevenueRepository) Deduct(ctx context.Context, uid string, yen int6
 	}
 	res := r.db.WithContext(ctx).
 		Model(&UserWallet{}).
-		Where("uid = ? AND revenue_balance_yen >= ?", uid, yen).
+		Where("uid = ? AND COALESCE(revenue_balance_yen,0) >= ?", uid, yen).
 		Updates(map[string]interface{}{
-			"revenue_balance_yen": gorm.Expr("revenue_balance_yen - ?", yen),
+			"revenue_balance_yen": gorm.Expr("COALESCE(revenue_balance_yen,0) - ?", yen),
 		})
 	if res.Error != nil {
 		return res.Error
