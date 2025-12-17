@@ -12,6 +12,7 @@ Hard rules (must follow):
 * Keep the product in the same position and perspective (no rotation or re-framing that changes its appearance).
 * Do NOT change the composition: keep the framing, orientation, and product scale identical. Do not crop or zoom differently.
 * Only edit the environment: background/desk/floor/walls, lighting, shadows, and remove unrelated clutter around the product.
+* Background must be pure seamless white (#ffffff〜#fdfdfd), flat and textureless. No wood grain, fabric, props, gradients, or patterns.
 * Output must look photorealistic, like a product-style photo shot in natural soft daylight.
 
 Task:
@@ -20,7 +21,7 @@ Clean up the background and lighting while preserving the product perfectly unch
 var stylePrompts = map[string]string{
 	"fashion-look": `Style target (fashion-look):
 
-* Create a clean white seamless background (pure white to very light warm white).
+* Create a clean white seamless background (pure white to very light warm white). Absolutely no wood grain, fabric texture, or props—only a flat white sweep.
 
 * Soft daylight, minimal natural shadows directly under the product.
 
