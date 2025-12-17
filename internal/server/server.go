@@ -71,10 +71,13 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	revenueRepo := repository.NewUserRevenueRepository(db)
+	treeRepo := repository.NewUserTreePointRepository(db)
 	revenueSvc := service.NewRevenueService(revenueRepo)
-	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo, notificationSvc, revenueSvc)
+	treeSvc := service.NewTreePointService(treeRepo)
+	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo, notificationSvc, revenueSvc, treeSvc)
 	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
 	revenueHandler := handler.NewRevenueHandler(revenueSvc)
+	treePointHandler := handler.NewTreePointHandler(treeSvc)
 
 	var storageClient *storage.Client
 	if os.Getenv("STORAGE_BUCKET") != "" {
@@ -121,6 +124,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/items/estimate-co2-preview", itemHandler.EstimateCO2Preview, authMw.RequireAuth)
 		api.GET("/me/revenue", revenueHandler.Get, authMw.RequireAuth)
 		api.POST("/me/revenue/withdraw", revenueHandler.Withdraw, authMw.RequireAuth)
+		api.GET("/me/tree-points", treePointHandler.Get, authMw.RequireAuth)
+		api.POST("/me/tree-points/use", treePointHandler.Use, authMw.RequireAuth)
 		api.GET("/me/items", itemHandler.ListMine, authMw.RequireAuth)
 		api.GET("/me/purchases", purchaseHandler.ListMine, authMw.RequireAuth)
 		api.GET("/me/sales", purchaseHandler.ListSales, authMw.RequireAuth)
@@ -150,6 +155,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/items/estimate-co2-preview", itemHandler.EstimateCO2Preview)
 		api.GET("/me/revenue", revenueHandler.Get)
 		api.POST("/me/revenue/withdraw", revenueHandler.Withdraw)
+		api.GET("/me/tree-points", treePointHandler.Get)
+		api.POST("/me/tree-points/use", treePointHandler.Use)
 		api.GET("/me/items", itemHandler.ListMine)
 		api.GET("/me/purchases", purchaseHandler.ListMine)
 		api.GET("/me/sales", purchaseHandler.ListSales)

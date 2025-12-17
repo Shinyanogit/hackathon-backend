@@ -31,6 +31,7 @@ type purchaseService struct {
 	convRepo     repository.ConversationRepository
 	notify       NotificationService
 	revenueSvc   RevenueService
+	treeSvc      TreePointService
 }
 
 type PurchaseWithItem struct {
@@ -38,8 +39,8 @@ type PurchaseWithItem struct {
 	Item     *model.Item
 }
 
-func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo repository.ItemRepository, convRepo repository.ConversationRepository, notify NotificationService, revenueSvc RevenueService) PurchaseService {
-	return &purchaseService{purchaseRepo: purchaseRepo, itemRepo: itemRepo, convRepo: convRepo, notify: notify, revenueSvc: revenueSvc}
+func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo repository.ItemRepository, convRepo repository.ConversationRepository, notify NotificationService, revenueSvc RevenueService, treeSvc TreePointService) PurchaseService {
+	return &purchaseService{purchaseRepo: purchaseRepo, itemRepo: itemRepo, convRepo: convRepo, notify: notify, revenueSvc: revenueSvc, treeSvc: treeSvc}
 }
 
 func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyerUID string) (*model.Purchase, error) {
@@ -201,6 +202,16 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 		title := "受取完了が報告されました"
 		bodyText := "購入者が受け取り済みに更新しました。取引が完了しました。"
 		s.notify.Notify(ctxShort, p.SellerUID, "purchase_delivered", title, bodyText, &p.ItemID, &p.ConversationID, &p.ID)
+	}
+	// tree points付与: co2Kg -> tree-years(10kg/yr) を buyer/seller 双方に加算
+	if s.treeSvc != nil {
+		if item, err := s.itemRepo.FindByID(ctx, p.ItemID); err == nil {
+			if item.Co2Kg != nil {
+				treePoints := *item.Co2Kg / 10.0
+				_ = s.treeSvc.Add(ctx, p.BuyerUID, treePoints)
+				_ = s.treeSvc.Add(ctx, p.SellerUID, treePoints)
+			}
+		}
 	}
 	return p, nil
 }
