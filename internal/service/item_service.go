@@ -75,6 +75,37 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 	if err := s.repo.Create(ctx, item); err != nil {
 		return nil, err
 	}
+	// 自動CO2推定（出品と同時にバックグラウンド実行）
+	if s.co2Estimator != nil {
+		img := ""
+		if imageURL != nil {
+			img = *imageURL
+		}
+		go func(id uint64, t, d, imgURL string, price uint) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[co2] item=%d stage=create_panic panic=%v", id, r)
+				}
+			}()
+			ctxShort, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			defer cancel()
+			val, err := s.co2Estimator.Estimate(ctxShort, t, d, imgURL)
+			if err != nil {
+				log.Printf("[co2] item=%d stage=create_estimate_err err=%v", id, err)
+				return
+			}
+			limit := float64(price) * 0.05
+			if val > limit {
+				log.Printf("[co2] item=%d stage=create_cap raw=%.3f cap=%.3f", id, val, limit)
+				val = limit
+			}
+			if rows, err := s.repo.UpdateCO2(ctxShort, id, &val); err != nil {
+				log.Printf("[co2] item=%d stage=create_db_err err=%v", id, err)
+			} else {
+				log.Printf("[co2] item=%d stage=create_db rows=%d", id, rows)
+			}
+		}(item.ID, item.Title, item.Description, img, item.Price)
+	}
 	return item, nil
 }
 
