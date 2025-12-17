@@ -19,16 +19,17 @@ func NewItemHandler(svc service.ItemService) *ItemHandler {
 }
 
 type ItemResponse struct {
-	ID           uint64  `json:"id"`
-	Title        string  `json:"title"`
-	Description  string  `json:"description"`
-	Price        uint    `json:"price"`
-	Status       string  `json:"status"`
-	ImageURL     *string `json:"imageUrl"`
-	CategorySlug string  `json:"categorySlug"`
-	SellerUID    string  `json:"sellerUid"`
-	CreatedAt    string  `json:"createdAt"`
-	UpdatedAt    string  `json:"updatedAt"`
+	ID           uint64   `json:"id"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Price        uint     `json:"price"`
+	Status       string   `json:"status"`
+	ImageURL     *string  `json:"imageUrl"`
+	CategorySlug string   `json:"categorySlug"`
+	SellerUID    string   `json:"sellerUid"`
+	Co2Kg        *float64 `json:"co2Kg,omitempty"`
+	CreatedAt    string   `json:"createdAt"`
+	UpdatedAt    string   `json:"updatedAt"`
 }
 
 type ItemListResponse struct {
@@ -113,6 +114,7 @@ func toItemResponse(item *model.Item) ItemResponse {
 		ImageURL:     item.ImageURL,
 		CategorySlug: item.CategorySlug,
 		SellerUID:    item.SellerUID,
+		Co2Kg:        item.Co2Kg,
 		CreatedAt:    item.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:    item.UpdatedAt.Format(time.RFC3339),
 	}

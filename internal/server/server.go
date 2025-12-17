@@ -58,7 +58,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	}))
 
 	itemRepo := repository.NewItemRepository(db)
-	itemSvc := service.NewItemService(itemRepo)
+	treeClient := ai.NewTreeCO2Client(nil)
+	itemSvc := service.NewItemService(itemRepo, treeClient)
 	itemHandler := handler.NewItemHandler(itemSvc)
 
 	convRepo := repository.NewConversationRepository(db)

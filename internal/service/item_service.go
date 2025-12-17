@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/repository"
@@ -22,11 +24,16 @@ type ItemService interface {
 }
 
 type itemService struct {
-	repo repository.ItemRepository
+	repo         repository.ItemRepository
+	co2Estimator interface {
+		Estimate(ctx context.Context, title, description, imageURL string) (float64, error)
+	}
 }
 
-func NewItemService(repo repository.ItemRepository) ItemService {
-	return &itemService{repo: repo}
+func NewItemService(repo repository.ItemRepository, estimator interface {
+	Estimate(ctx context.Context, title, description, imageURL string) (float64, error)
+}) ItemService {
+	return &itemService{repo: repo, co2Estimator: estimator}
 }
 
 func (s *itemService) Create(ctx context.Context, title, description string, price uint, imageURL *string, categorySlug string, sellerUID string) (*model.Item, error) {
@@ -61,6 +68,22 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
 		return nil, err
+	}
+	if imageURL != nil && s.co2Estimator != nil {
+		go func(id uint64, title, desc, img string) {
+			ctxShort, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[co2] recover panic: %v", r)
+				}
+			}()
+			val, err := s.co2Estimator.Estimate(ctxShort, title, desc, img)
+			if err != nil {
+				return
+			}
+			_ = s.repo.UpdateCO2(ctxShort, id, &val)
+		}(item.ID, item.Title, item.Description, *imageURL)
 	}
 	return item, nil
 }

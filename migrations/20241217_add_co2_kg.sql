@@ -1,0 +1,2 @@
+ALTER TABLE items
+ADD COLUMN co2_kg DECIMAL(10,2) NULL AFTER seller_uid;
