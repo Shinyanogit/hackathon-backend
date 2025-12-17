@@ -169,16 +169,8 @@ func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID stri
 		}
 		fields["price"] = price
 	}
-	needsReset := false
 	if imageURL != nil {
 		fields["image_url"] = imageURL
-		needsReset = true
-	}
-	if title != "" || description != "" {
-		needsReset = true
-	}
-	if needsReset {
-		fields["co2_kg"] = nil
 	}
 	if categorySlug != "" {
 		fields["category_slug"] = strings.TrimSpace(categorySlug)
