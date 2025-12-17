@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/shinyyama/hackathon-backend/internal/co2ctx"
@@ -51,10 +52,9 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 
 	prompt := `あなたはリユース品のCO2削減量を概算する推定器です。
 入力（タイトル/説明/画像）から「新品購入を回避できた場合の推定CO2削減量(kgCO2e)」を1つだけ推定してください。
-出力は次の形式の“数値だけ”にしてください: $<number>$
-それ以外の文字は一切出さないでください（説明文、単位、改行、空白も不要）。
-<number> は 0〜5000 の範囲、整数または小数1桁まで。
-不明なら $0$。`
+最終回答は「数値1つのみ」を必ず返してください。単位は gCO2e で考え、例: 300
+それ以外の説明文や記号、改行、空白は出さないでください。
+<number> は 0〜5000 の範囲、整数または小数1桁まで。不明なら 0 を返してください。`
 
 	parts := []*genai.Part{
 		genai.NewPartFromText(prompt),
@@ -83,16 +83,16 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 	genDur := time.Since(genStart)
 	log.Printf("[co2] rid=%s item=%d stage=gemini_done model=%s genMs=%d", rid, itemID, c.model, genDur.Milliseconds())
 	log.Printf("[co2] rid=%s item=%d stage=parse_start", rid, itemID)
-	val, err := ParseCO2(res.Text())
+	val, unit, err := ParseCO2WithUnit(res.Text())
 	if err != nil {
-		text := res.Text()
-		if len(text) > 120 {
-			text = text[:120]
+		text := strings.ReplaceAll(res.Text(), "\n", " ")
+		if len(text) > 80 {
+			text = text[:80]
 		}
-		log.Printf("[co2] rid=%s item=%d stage=parse_fail text=%q err=%v", rid, itemID, text, err)
+		log.Printf("[co2] rid=%s item=%d stage=parse_fail len=%d text=%q err=%v", rid, itemID, len(res.Text()), text, err)
 		return 0, err
 	}
-	log.Printf("[co2] rid=%s item=%d stage=parse_ok fetchMs=%d genMs=%d totalMs=%d", rid, itemID, fetchDur.Milliseconds(), genDur.Milliseconds(), time.Since(start).Milliseconds())
+	log.Printf("[co2] rid=%s item=%d stage=parse_ok value=%.3f unit=%s fetchMs=%d genMs=%d totalMs=%d", rid, itemID, val, unit, fetchDur.Milliseconds(), genDur.Milliseconds(), time.Since(start).Milliseconds())
 	return val, nil
 }
 

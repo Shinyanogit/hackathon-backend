@@ -13,6 +13,10 @@ func TestParseCO2(t *testing.T) {
 		{"decimal", "value is $12.5$", 12.5, false},
 		{"no match", "nothing here", 0, true},
 		{"multiple", "$1$ and $2$", 1, false},
+		{"fallback bare", "300", 300, false},
+		{"fallback prefixed", "CO2=300", 300, false},
+		{"fallback unit", "300 gCO2e", 300, false},
+		{"fallback about", "about 300", 300, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/shinyyama/hackathon-backend/internal/ai"
 	"github.com/shinyyama/hackathon-backend/internal/co2ctx"
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/service"
@@ -258,6 +259,14 @@ func (h *ItemHandler) EstimateCO2(c echo.Context) error {
 			if err.Error() == "timeout" || errors.Is(err, context.DeadlineExceeded) {
 				log.Printf("[co2] rid=%s item=%d stage=error err=timeout", rid, id)
 				return c.JSON(http.StatusGatewayTimeout, NewErrorResponse("gateway_timeout", "estimation timed out"))
+			}
+			if errors.Is(err, ai.ErrParseFailed) {
+				log.Printf("[co2] rid=%s item=%d stage=error err=parse_failed", rid, id)
+				return c.JSON(http.StatusUnprocessableEntity, map[string]interface{}{
+					"error":  "parse_failed",
+					"rid":    rid,
+					"itemId": id,
+				})
 			}
 			log.Printf("[co2] rid=%s item=%d stage=error err=%v", rid, id, err)
 			return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", "estimation failed"))
