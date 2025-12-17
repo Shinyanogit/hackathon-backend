@@ -62,7 +62,10 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	itemHandler := handler.NewItemHandler(itemSvc)
 
 	convRepo := repository.NewConversationRepository(db)
-	convSvc := service.NewConversationService(convRepo, itemRepo)
+	notificationRepo := repository.NewNotificationRepository(db)
+	notificationSvc := service.NewNotificationService(notificationRepo)
+
+	convSvc := service.NewConversationService(convRepo, itemRepo, notificationSvc)
 	convHandler := handler.NewConversationHandler(convSvc)
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
@@ -95,6 +98,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	if authMw != nil && authMw.Client() != nil {
 		userHandler = handler.NewUserHandler(authMw.Client(), authMw.EnvProjectID(), authMw.CredProjectID())
 	}
+	notificationHandler := handler.NewNotificationHandler(notificationSvc)
 
 	e.GET("/healthz", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
@@ -128,6 +132,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered, authMw.RequireAuth)
 		api.POST("/purchases/:id/cancel", purchaseHandler.Cancel, authMw.RequireAuth)
 		api.POST("/ai/image-enhance", aiHandler.EnhanceImage, authMw.RequireAuth)
+		api.GET("/me/notifications", notificationHandler.List, authMw.RequireAuth)
+		api.POST("/me/notifications/read-all", notificationHandler.MarkAllRead, authMw.RequireAuth)
 	} else {
 		api.POST("/items", itemHandler.Create)
 		api.PUT("/items/:id", itemHandler.Update)
@@ -151,6 +157,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.POST("/purchases/:id/receive", purchaseHandler.MarkDelivered)
 		api.POST("/purchases/:id/cancel", purchaseHandler.Cancel)
 		api.POST("/ai/image-enhance", aiHandler.EnhanceImage)
+		api.GET("/me/notifications", notificationHandler.List)
+		api.POST("/me/notifications/read-all", notificationHandler.MarkAllRead)
 	}
 	api.GET("/items", itemHandler.List)
 	api.GET("/items/:id", itemHandler.Get)

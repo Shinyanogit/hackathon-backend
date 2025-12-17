@@ -30,10 +30,11 @@ type ConversationWithUnread struct {
 type conversationService struct {
 	convRepo repository.ConversationRepository
 	itemRepo repository.ItemRepository
+	notify   NotificationService
 }
 
-func NewConversationService(convRepo repository.ConversationRepository, itemRepo repository.ItemRepository) ConversationService {
-	return &conversationService{convRepo: convRepo, itemRepo: itemRepo}
+func NewConversationService(convRepo repository.ConversationRepository, itemRepo repository.ItemRepository, notify NotificationService) ConversationService {
+	return &conversationService{convRepo: convRepo, itemRepo: itemRepo, notify: notify}
 }
 
 func (s *conversationService) CreateOrGet(ctx context.Context, itemID uint64, buyerUID string) (*model.Conversation, error) {
@@ -131,7 +132,11 @@ func (s *conversationService) CreateMessage(ctx context.Context, convID uint64, 
 		SenderName:     senderName,
 		SenderIconURL:  senderIconURL,
 	}
-	return s.convRepo.CreateMessage(ctx, msg)
+	if err := s.convRepo.CreateMessage(ctx, msg); err != nil {
+		return err
+	}
+	s.notifyDM(ctx, cv, uid, msg.ID, msg.Body)
+	return nil
 }
 
 func (s *conversationService) MarkRead(ctx context.Context, convID uint64, uid string) error {
@@ -222,5 +227,29 @@ func (s *conversationService) PostMessageToItem(ctx context.Context, itemID uint
 	if err := s.convRepo.CreateMessage(ctx, msg); err != nil {
 		return nil, nil, err
 	}
+	s.notifyDM(ctx, cv, uid, msg.ID, msg.Body)
 	return msg, cv, nil
+}
+
+func (s *conversationService) notifyDM(ctx context.Context, cv *model.Conversation, senderUID string, msgID uint64, body string) {
+	if s.notify == nil || cv == nil {
+		return
+	}
+	var target string
+	switch senderUID {
+	case cv.SellerUID:
+		target = cv.BuyerUID
+	case cv.BuyerUID:
+		target = cv.SellerUID
+	}
+	if target == "" || target == senderUID {
+		return
+	}
+	ctxShort, cancel := withShortDeadline(ctx)
+	defer cancel()
+	preview := body
+	if len(preview) > 80 {
+		preview = preview[:80] + "..."
+	}
+	s.notify.Notify(ctxShort, target, "dm_received", "新しいメッセージ", preview, &cv.ItemID, &cv.ID, nil)
 }
