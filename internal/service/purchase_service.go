@@ -30,6 +30,7 @@ type purchaseService struct {
 	itemRepo     repository.ItemRepository
 	convRepo     repository.ConversationRepository
 	notify       NotificationService
+	revenueSvc   RevenueService
 }
 
 type PurchaseWithItem struct {
@@ -37,8 +38,8 @@ type PurchaseWithItem struct {
 	Item     *model.Item
 }
 
-func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo repository.ItemRepository, convRepo repository.ConversationRepository, notify NotificationService) PurchaseService {
-	return &purchaseService{purchaseRepo: purchaseRepo, itemRepo: itemRepo, convRepo: convRepo, notify: notify}
+func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo repository.ItemRepository, convRepo repository.ConversationRepository, notify NotificationService, revenueSvc RevenueService) PurchaseService {
+	return &purchaseService{purchaseRepo: purchaseRepo, itemRepo: itemRepo, convRepo: convRepo, notify: notify, revenueSvc: revenueSvc}
 }
 
 func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyerUID string) (*model.Purchase, error) {
@@ -186,6 +187,13 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 			SenderName:     "購入者",
 			Body:           "商品を受け取りました。ありがとうございました！",
 		})
+	}
+	// 売上計上: 価格の90%をセンチ単位で加算
+	if s.revenueSvc != nil {
+		if item, err := s.itemRepo.FindByID(ctx, p.ItemID); err == nil {
+			amountCents := int64(item.Price) * 90
+			_ = s.revenueSvc.Add(ctx, p.SellerUID, amountCents)
+		}
 	}
 	if s.notify != nil {
 		ctxShort, cancel := context.WithTimeout(ctx, 2*time.Second)

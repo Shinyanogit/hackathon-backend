@@ -70,8 +70,11 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	convHandler := handler.NewConversationHandler(convSvc)
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
-	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo, notificationSvc)
+	revenueRepo := repository.NewUserRevenueRepository(db)
+	revenueSvc := service.NewRevenueService(revenueRepo)
+	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo, notificationSvc, revenueSvc)
 	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
+	revenueHandler := handler.NewRevenueHandler(revenueSvc)
 
 	var storageClient *storage.Client
 	if os.Getenv("STORAGE_BUCKET") != "" {
@@ -115,6 +118,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.PUT("/items/:id", itemHandler.Update, authMw.RequireAuth)
 		api.DELETE("/items/:id", itemHandler.Delete, authMw.RequireAuth)
 		api.POST("/items/:id/estimate-co2", itemHandler.EstimateCO2, authMw.RequireAuth)
+		api.GET("/me/revenue", revenueHandler.Get, authMw.RequireAuth)
+		api.POST("/me/revenue/withdraw", revenueHandler.Withdraw, authMw.RequireAuth)
 		api.GET("/me/items", itemHandler.ListMine, authMw.RequireAuth)
 		api.GET("/me/purchases", purchaseHandler.ListMine, authMw.RequireAuth)
 		api.GET("/me/sales", purchaseHandler.ListSales, authMw.RequireAuth)
@@ -141,6 +146,8 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 		api.PUT("/items/:id", itemHandler.Update)
 		api.DELETE("/items/:id", itemHandler.Delete)
 		api.POST("/items/:id/estimate-co2", itemHandler.EstimateCO2)
+		api.GET("/me/revenue", revenueHandler.Get)
+		api.POST("/me/revenue/withdraw", revenueHandler.Withdraw)
 		api.GET("/me/items", itemHandler.ListMine)
 		api.GET("/me/purchases", purchaseHandler.ListMine)
 		api.GET("/me/sales", purchaseHandler.ListSales)

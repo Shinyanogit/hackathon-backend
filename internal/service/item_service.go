@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shinyyama/hackathon-backend/internal/co2ctx"
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/repository"
 	"gorm.io/gorm"
@@ -48,6 +49,9 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 	}
 	if description == "" {
 		return nil, errors.New("invalid description")
+	}
+	if price < 100 {
+		return nil, errors.New("price must be at least 100")
 	}
 	if categorySlug == "" {
 		return nil, errors.New("category is required")
@@ -128,6 +132,9 @@ func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID stri
 		fields["description"] = strings.TrimSpace(description)
 	}
 	if price > 0 {
+		if price < 100 {
+			return nil, errors.New("price must be at least 100")
+		}
 		fields["price"] = price
 	}
 	needsReset := false
@@ -173,37 +180,55 @@ func (s *itemService) EstimateCO2(ctx context.Context, id uint64, sellerUID stri
 	if s.co2Estimator == nil {
 		return nil, errors.New("co2 estimator not configured")
 	}
+	rid := co2ctx.RID(ctx)
+	itemID := id
+	log.Printf("[co2] rid=%s item=%d stage=start", rid, itemID)
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[co2-estimate] recover panic: %v", r)
+			log.Printf("[co2] rid=%s item=%d panic=%v", rid, itemID, r)
 		}
 	}()
 	item, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		log.Printf("[co2] rid=%s item=%d stage=find err=%v", rid, itemID, err)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
 	if item.SellerUID != sellerUID {
+		log.Printf("[co2] rid=%s item=%d stage=validate err=forbidden", rid, itemID)
 		return nil, errors.New("forbidden")
 	}
 	if item.ImageURL == nil || strings.TrimSpace(*item.ImageURL) == "" {
+		log.Printf("[co2] rid=%s item=%d stage=validate err=image_required", rid, itemID)
 		return nil, errors.New("image is required for estimation")
 	}
 	ctxShort, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
+	ctxShort = co2ctx.WithItemID(ctxShort, itemID)
+	estimateStart := time.Now()
 	val, err := s.co2Estimator.Estimate(ctxShort, item.Title, item.Description, *item.ImageURL)
 	if err != nil {
+		log.Printf("[co2] rid=%s item=%d stage=estimate err=%v", rid, itemID, err)
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("timeout")
 		}
 		return nil, err
 	}
+	log.Printf("[co2] rid=%s item=%d stage=estimate_done durMs=%d", rid, itemID, time.Since(estimateStart).Milliseconds())
+	// cap co2 to 5% of price
+	limit := float64(item.Price) * 0.05
+	if val > limit {
+		log.Printf("[co2] rid=%s item=%d stage=cap applied raw=%.3f cap=%.3f", rid, itemID, val, limit)
+		val = limit
+	}
 	dbStart := time.Now()
-	if err := s.repo.UpdateCO2Force(ctxShort, id, &val); err != nil {
+	rows, err := s.repo.UpdateCO2Force(ctxShort, id, &val)
+	if err != nil {
+		log.Printf("[co2] rid=%s item=%d stage=db_update_err err=%v", rid, itemID, err)
 		return nil, err
 	}
-	log.Printf("[co2] db update took %v", time.Since(dbStart))
+	log.Printf("[co2] rid=%s item=%d stage=db_update rows=%d durMs=%d", rid, itemID, rows, time.Since(dbStart).Milliseconds())
 	return &val, nil
 }

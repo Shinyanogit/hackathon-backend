@@ -17,8 +17,8 @@ type ItemRepository interface {
 	UpdateBySeller(ctx context.Context, id uint64, sellerUID string, fields map[string]interface{}) error
 	UpdateStatus(ctx context.Context, id uint64, status model.ItemStatus) error
 	DeleteBySeller(ctx context.Context, id uint64, sellerUID string) error
-	UpdateCO2(ctx context.Context, id uint64, co2kg *float64) error
-	UpdateCO2Force(ctx context.Context, id uint64, co2kg *float64) error
+	UpdateCO2(ctx context.Context, id uint64, co2kg *float64) (int64, error)
+	UpdateCO2Force(ctx context.Context, id uint64, co2kg *float64) (int64, error)
 	SetDB(db *gorm.DB)
 }
 
@@ -114,18 +114,18 @@ func (r *itemRepository) UpdateBySeller(ctx context.Context, id uint64, sellerUI
 	return nil
 }
 
-func (r *itemRepository) UpdateCO2Force(ctx context.Context, id uint64, co2kg *float64) error {
+func (r *itemRepository) UpdateCO2Force(ctx context.Context, id uint64, co2kg *float64) (int64, error) {
 	res := r.db.WithContext(ctx).
 		Model(&model.Item{}).
 		Where("id = ?", id).
 		Update("co2_kg", co2kg)
 	if res.Error != nil {
-		return res.Error
+		return 0, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return 0, gorm.ErrRecordNotFound
 	}
-	return nil
+	return res.RowsAffected, nil
 }
 
 func (r *itemRepository) UpdateStatus(ctx context.Context, id uint64, status model.ItemStatus) error {
@@ -155,16 +155,16 @@ func (r *itemRepository) DeleteBySeller(ctx context.Context, id uint64, sellerUI
 	return nil
 }
 
-func (r *itemRepository) UpdateCO2(ctx context.Context, id uint64, co2kg *float64) error {
+func (r *itemRepository) UpdateCO2(ctx context.Context, id uint64, co2kg *float64) (int64, error) {
 	res := r.db.WithContext(ctx).
 		Model(&model.Item{}).
 		Where("id = ? AND co2_kg IS NULL", id).
 		Update("co2_kg", co2kg)
 	if res.Error != nil {
-		return res.Error
+		return 0, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		return 0, gorm.ErrRecordNotFound
 	}
-	return nil
+	return res.RowsAffected, nil
 }
