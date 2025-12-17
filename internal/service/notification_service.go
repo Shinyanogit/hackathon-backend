@@ -6,6 +6,7 @@ import (
 
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/repository"
+	"log"
 )
 
 type NotificationService interface {
@@ -25,6 +26,7 @@ func NewNotificationService(repo repository.NotificationRepository) Notification
 // Notify is best-effort; it logs errors but does not return them to avoid breaking main flows.
 func (s *notificationService) Notify(ctx context.Context, userUID, typ, title, body string, itemID, convID, purchaseID *uint64) {
 	if userUID == "" || typ == "" {
+		log.Printf("[notify] skip: missing userUID or type (user=%s type=%s)", userUID, typ)
 		return
 	}
 	n := &model.Notification{
@@ -36,7 +38,11 @@ func (s *notificationService) Notify(ctx context.Context, userUID, typ, title, b
 		ConversationID: convID,
 		PurchaseID:     purchaseID,
 	}
-	_ = s.repo.Create(ctx, n)
+	if err := s.repo.Create(ctx, n); err != nil {
+		log.Printf("[notify] create failed user=%s type=%s item=%v conv=%v purchase=%v err=%v", userUID, typ, itemID, convID, purchaseID, err)
+	} else {
+		log.Printf("[notify] created user=%s type=%s item=%v conv=%v purchase=%v", userUID, typ, itemID, convID, purchaseID)
+	}
 }
 
 func (s *notificationService) List(ctx context.Context, userUID string, unreadOnly bool, limit int) ([]model.Notification, int64, error) {

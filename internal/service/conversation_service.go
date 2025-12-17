@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"github.com/shinyyama/hackathon-backend/internal/repository"
@@ -233,6 +234,7 @@ func (s *conversationService) PostMessageToItem(ctx context.Context, itemID uint
 
 func (s *conversationService) notifyDM(ctx context.Context, cv *model.Conversation, senderUID string, msgID uint64, body string) {
 	if s.notify == nil || cv == nil {
+		log.Printf("[notifyDM] skip: notify service nil or conversation nil (sender=%s)", senderUID)
 		return
 	}
 	var target string
@@ -243,6 +245,7 @@ func (s *conversationService) notifyDM(ctx context.Context, cv *model.Conversati
 		target = cv.SellerUID
 	}
 	if target == "" || target == senderUID {
+		log.Printf("[notifyDM] skip: target empty or same as sender sender=%s target=%s conv=%d", senderUID, target, cv.ID)
 		return
 	}
 	ctxShort, cancel := withShortDeadline(ctx)
@@ -251,5 +254,6 @@ func (s *conversationService) notifyDM(ctx context.Context, cv *model.Conversati
 	if len(preview) > 80 {
 		preview = preview[:80] + "..."
 	}
+	log.Printf("[notifyDM] notify target=%s sender=%s conv=%d item=%d", target, senderUID, cv.ID, cv.ItemID)
 	s.notify.Notify(ctxShort, target, "dm_received", "新しいメッセージ", preview, &cv.ItemID, &cv.ID, nil)
 }
