@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/shinyyama/hackathon-backend/internal/model"
 	"gorm.io/gorm"
@@ -12,6 +13,7 @@ type PurchaseRepository interface {
 	FindByItem(ctx context.Context, itemID uint64) (*model.Purchase, error)
 	FindByID(ctx context.Context, id uint64) (*model.Purchase, error)
 	Update(ctx context.Context, p *model.Purchase) error
+	MarkDeliveredIfPending(ctx context.Context, id uint64, buyerUID string) (int64, error)
 	ListByBuyer(ctx context.Context, buyerUID string) ([]model.Purchase, error)
 	ListBySeller(ctx context.Context, sellerUID string) ([]model.Purchase, error)
 	SetDB(db *gorm.DB)
@@ -50,6 +52,21 @@ func (r *purchaseRepository) FindByID(ctx context.Context, id uint64) (*model.Pu
 
 func (r *purchaseRepository) Update(ctx context.Context, p *model.Purchase) error {
 	return r.db.WithContext(ctx).Save(p).Error
+}
+
+func (r *purchaseRepository) MarkDeliveredIfPending(ctx context.Context, id uint64, buyerUID string) (int64, error) {
+	now := time.Now()
+	res := r.db.WithContext(ctx).
+		Model(&model.Purchase{}).
+		Where("id = ? AND buyer_uid = ? AND status <> ?", id, buyerUID, model.PurchaseStatusDelivered).
+		Updates(map[string]interface{}{
+			"status":       model.PurchaseStatusDelivered,
+			"delivered_at": now,
+		})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.RowsAffected, nil
 }
 
 func (r *purchaseRepository) ListByBuyer(ctx context.Context, buyerUID string) ([]model.Purchase, error) {

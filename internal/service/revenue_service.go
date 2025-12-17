@@ -27,7 +27,7 @@ func (s *revenueService) Get(ctx context.Context, uid string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return r.RevenueCents, nil
+	return r.BalanceYen, nil
 }
 
 func (s *revenueService) Deduct(ctx context.Context, uid string, cents int64) (int64, error) {

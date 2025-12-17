@@ -64,12 +64,16 @@ func (h *PurchaseHandler) PurchaseItem(c echo.Context) error {
 	if uid == "" {
 		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
 	}
+	var body struct {
+		PointsUsed float64 `json:"pointsUsed"`
+	}
+	_ = c.Bind(&body)
 	itemIDParam := c.Param("id")
 	itemID, err := strconv.ParseUint(itemIDParam, 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid item id"))
 	}
-	p, err := h.svc.PurchaseItem(c.Request().Context(), itemID, uid)
+	p, err := h.svc.PurchaseItem(c.Request().Context(), itemID, uid, body.PointsUsed)
 	if err != nil {
 		switch err {
 		case service.ErrNotFound:

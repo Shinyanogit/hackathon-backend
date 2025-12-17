@@ -30,16 +30,16 @@ func (h *TreePointHandler) Get(c echo.Context) error {
 	})
 }
 
-type usePointRequest struct {
+type spendPointRequest struct {
 	Points float64 `json:"points"`
 }
 
-func (h *TreePointHandler) Use(c echo.Context) error {
+func (h *TreePointHandler) Spend(c echo.Context) error {
 	uid, _ := c.Get("uid").(string)
 	if uid == "" {
 		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
 	}
-	var req usePointRequest
+	var req spendPointRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
 	}

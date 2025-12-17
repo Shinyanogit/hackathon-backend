@@ -20,6 +20,8 @@ type Purchase struct {
 	Status         PurchaseStatus `gorm:"column:status;size:32;not null"`
 	ShippingQRURL  string         `gorm:"column:shipping_qr_url;type:text"`
 	ShippingNote   string         `gorm:"column:shipping_note;type:text"`
+	PointsUsed     float64        `gorm:"column:points_used"`
+	PaidYen        int64          `gorm:"column:paid_yen"`
 	ShippedAt      *time.Time     `gorm:"column:shipped_at"`
 	DeliveredAt    *time.Time     `gorm:"column:delivered_at"`
 	CreatedAt      time.Time      `gorm:"autoCreateTime"`

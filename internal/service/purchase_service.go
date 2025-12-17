@@ -16,7 +16,7 @@ var ErrAlreadyPurchased = errors.New("already_purchased")
 var ErrForbidden = errors.New("forbidden")
 
 type PurchaseService interface {
-	PurchaseItem(ctx context.Context, itemID uint64, buyerUID string) (*model.Purchase, error)
+	PurchaseItem(ctx context.Context, itemID uint64, buyerUID string, pointsUsed float64) (*model.Purchase, error)
 	GetByItem(ctx context.Context, itemID uint64, uid string) (*model.Purchase, error)
 	MarkShipped(ctx context.Context, purchaseID uint64, sellerUID string) (*model.Purchase, error)
 	MarkDelivered(ctx context.Context, purchaseID uint64, buyerUID string) (*model.Purchase, error)
@@ -43,7 +43,7 @@ func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo rep
 	return &purchaseService{purchaseRepo: purchaseRepo, itemRepo: itemRepo, convRepo: convRepo, notify: notify, revenueSvc: revenueSvc, treeSvc: treeSvc}
 }
 
-func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyerUID string) (*model.Purchase, error) {
+func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyerUID string, pointsUsed float64) (*model.Purchase, error) {
 	if buyerUID == "" {
 		return nil, errors.New("buyer is required")
 	}
@@ -82,6 +82,24 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 	shippingQR := fmt.Sprintf("https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=item-%d-buyer-%s", itemID, escapedBuyer)
 	shippingNote := "コンビニ端末で「発送受付」を選び、店員にこのQRコードを見せて発送手続きを完了してください。梱包用の袋は店舗で用意されます。"
 
+	usePoints := pointsUsed
+	if usePoints < 0 {
+		usePoints = 0
+	}
+	// charge points (balance check) before creating purchase
+	if s.treeSvc != nil && usePoints > 0 {
+		if _, _, err := s.treeSvc.Deduct(ctx, buyerUID, usePoints); err != nil {
+			return nil, err
+		}
+	}
+	paidYen := int64(item.Price)
+	if s.treeSvc != nil && usePoints > 0 {
+		deduction := int64(usePoints)
+		if deduction > paidYen {
+			deduction = paidYen
+		}
+		paidYen = paidYen - deduction
+	}
 	p := &model.Purchase{
 		ItemID:         itemID,
 		BuyerUID:       buyerUID,
@@ -90,6 +108,8 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 		Status:         model.PurchaseStatusPendingShipment,
 		ShippingQRURL:  shippingQR,
 		ShippingNote:   shippingNote,
+		PointsUsed:     usePoints,
+		PaidYen:        paidYen,
 	}
 	if err := s.purchaseRepo.Create(ctx, p); err != nil {
 		return nil, err
@@ -174,12 +194,17 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 	if p.Status == model.PurchaseStatusDelivered {
 		return p, nil
 	}
+	rows, err := s.purchaseRepo.MarkDeliveredIfPending(ctx, purchaseID, buyerUID)
+	if err != nil {
+		return nil, err
+	}
+	if rows == 0 {
+		// already delivered
+		return p, nil
+	}
 	now := time.Now()
 	p.Status = model.PurchaseStatusDelivered
 	p.DeliveredAt = &now
-	if err := s.purchaseRepo.Update(ctx, p); err != nil {
-		return nil, err
-	}
 	_ = s.itemRepo.UpdateStatus(ctx, p.ItemID, model.ItemStatusSold)
 	if p.ConversationID != 0 {
 		_ = s.convRepo.CreateMessage(ctx, &model.Message{
@@ -192,8 +217,12 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 	// 売上計上: 価格の90%をセンチ単位で加算
 	if s.revenueSvc != nil {
 		if item, err := s.itemRepo.FindByID(ctx, p.ItemID); err == nil {
-			amountCents := int64(item.Price) * 90
-			_ = s.revenueSvc.Add(ctx, p.SellerUID, amountCents)
+			amountYen := int64(item.Price)
+			if amountYen < 0 {
+				amountYen = 0
+			}
+			credit := int64(float64(amountYen) * 0.9)
+			_ = s.revenueSvc.Add(ctx, p.SellerUID, credit)
 		}
 	}
 	if s.notify != nil {
