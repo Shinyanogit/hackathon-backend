@@ -22,7 +22,7 @@ func NewTreeCO2Client(httpClient *http.Client) *TreeCO2Client {
 	if model == "" {
 		model = "gemini-2.5-flash"
 	}
-’	if httpClient == nil {
+	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 20 * time.Second}
 	}
 	return &TreeCO2Client{model: model, httpClient: httpClient}
