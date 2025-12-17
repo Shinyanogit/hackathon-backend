@@ -244,8 +244,12 @@ func (s *conversationService) notifyDM(ctx context.Context, cv *model.Conversati
 	case cv.BuyerUID:
 		target = cv.SellerUID
 	}
+	// fallback: itemへのDMで buyer_uid が未設定のケースは出品者へ通知
+	if target == "" && cv.SellerUID != "" && senderUID != cv.SellerUID {
+		target = cv.SellerUID
+	}
 	if target == "" || target == senderUID {
-		log.Printf("[notifyDM] skip: target empty or same as sender sender=%s target=%s conv=%d", senderUID, target, cv.ID)
+		log.Printf("[notifyDM] skip: target empty or same as sender sender=%s target=%s conv=%d seller=%s buyer=%s", senderUID, target, cv.ID, cv.SellerUID, cv.BuyerUID)
 		return
 	}
 	ctxShort, cancel := withShortDeadline(ctx)
@@ -254,6 +258,6 @@ func (s *conversationService) notifyDM(ctx context.Context, cv *model.Conversati
 	if len(preview) > 80 {
 		preview = preview[:80] + "..."
 	}
-	log.Printf("[notifyDM] notify target=%s sender=%s conv=%d item=%d", target, senderUID, cv.ID, cv.ItemID)
+	log.Printf("[notifyDM] notify target=%s sender=%s conv=%d item=%d seller=%s buyer=%s", target, senderUID, cv.ID, cv.ItemID, cv.SellerUID, cv.BuyerUID)
 	s.notify.Notify(ctxShort, target, "dm_received", "新しいメッセージ", preview, &cv.ItemID, &cv.ID, nil)
 }
