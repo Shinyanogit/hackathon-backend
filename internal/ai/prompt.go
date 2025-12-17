@@ -54,7 +54,7 @@ var stylePrompts = map[string]string{
 }
 
 const safetySuffix = `If the product surface looks cleaner than the input, revert: the product must be identical to the input photo. Only the background and lighting may change.
-Do not alter composition, orientation, or scale. Background should be clean white; product remains untouched.
+Do not alter composition, orientation, or scale. Background should be clean white; product remains untouched.(特に製品自体の傷や汚れなどクレームになる要因は絶対に誤魔化さないこと。)
 No text, no watermark, no added props.`
 
 // BuildEnhancePrompt concatenates base, style, and safety prompts. Mode fallback defaults to fashion-look.
