@@ -217,11 +217,15 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 	// 売上計上: 価格の90%をセンチ単位で加算
 	if s.revenueSvc != nil {
 		if item, err := s.itemRepo.FindByID(ctx, p.ItemID); err == nil {
-			amountYen := int64(item.Price)
+			// ベース金額は支払額(PaidYen)があればそれを、無ければ商品価格
+			amountYen := p.PaidYen
+			if amountYen <= 0 {
+				amountYen = int64(item.Price)
+			}
 			if amountYen < 0 {
 				amountYen = 0
 			}
-			credit := int64(float64(amountYen) * 0.9)
+			credit := amountYen * 90 / 100 // 90% を整数切り捨てで計上
 			_ = s.revenueSvc.Add(ctx, p.SellerUID, credit)
 		}
 	}
