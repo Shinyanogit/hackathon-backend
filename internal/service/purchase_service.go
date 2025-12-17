@@ -60,7 +60,7 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 	if item.Status == model.ItemStatusPaused {
 		return nil, errors.New("item is paused")
 	}
-	if item.Status == model.ItemStatusSold {
+	if item.Status == model.ItemStatusSold || item.Status == model.ItemStatusInTransaction {
 		return nil, ErrAlreadyPurchased
 	}
 	if existing, err := s.purchaseRepo.FindByItem(ctx, itemID); err == nil && existing != nil {
@@ -91,7 +91,7 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 	if err := s.purchaseRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
-	_ = s.itemRepo.UpdateStatus(ctx, itemID, model.ItemStatusSold)
+	_ = s.itemRepo.UpdateStatus(ctx, itemID, model.ItemStatusInTransaction)
 	_ = s.convRepo.CreateMessage(ctx, &model.Message{
 		ConversationID: cv.ID,
 		SenderUID:      buyerUID,
@@ -163,6 +163,7 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 	if err := s.purchaseRepo.Update(ctx, p); err != nil {
 		return nil, err
 	}
+	_ = s.itemRepo.UpdateStatus(ctx, p.ItemID, model.ItemStatusSold)
 	if p.ConversationID != 0 {
 		_ = s.convRepo.CreateMessage(ctx, &model.Message{
 			ConversationID: p.ConversationID,

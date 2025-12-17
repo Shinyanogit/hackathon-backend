@@ -22,7 +22,8 @@ func (Item) TableName() string {
 type ItemStatus string
 
 const (
-	ItemStatusListed ItemStatus = "listed"
-	ItemStatusPaused ItemStatus = "paused"
-	ItemStatusSold   ItemStatus = "sold"
+	ItemStatusListed        ItemStatus = "listed"
+	ItemStatusPaused        ItemStatus = "paused"
+	ItemStatusInTransaction ItemStatus = "in_transaction"
+	ItemStatusSold          ItemStatus = "sold"
 )
