@@ -18,6 +18,7 @@ type ItemRepository interface {
 	UpdateStatus(ctx context.Context, id uint64, status model.ItemStatus) error
 	DeleteBySeller(ctx context.Context, id uint64, sellerUID string) error
 	UpdateCO2(ctx context.Context, id uint64, co2kg *float64) error
+	UpdateCO2Force(ctx context.Context, id uint64, co2kg *float64) error
 	SetDB(db *gorm.DB)
 }
 
@@ -104,6 +105,20 @@ func (r *itemRepository) UpdateBySeller(ctx context.Context, id uint64, sellerUI
 		Model(&model.Item{}).
 		Where("id = ? AND seller_uid = ?", id, sellerUID).
 		Updates(fields)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *itemRepository) UpdateCO2Force(ctx context.Context, id uint64, co2kg *float64) error {
+	res := r.db.WithContext(ctx).
+		Model(&model.Item{}).
+		Where("id = ?", id).
+		Update("co2_kg", co2kg)
 	if res.Error != nil {
 		return res.Error
 	}

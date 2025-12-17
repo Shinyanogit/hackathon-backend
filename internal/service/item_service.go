@@ -21,6 +21,7 @@ type ItemService interface {
 	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
 	UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string, status string) (*model.Item, error)
 	DeleteOwned(ctx context.Context, id uint64, sellerUID string) error
+	EstimateCO2(ctx context.Context, id uint64, sellerUID string) (*float64, error)
 }
 
 type itemService struct {
@@ -68,22 +69,6 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
 		return nil, err
-	}
-	if imageURL != nil && s.co2Estimator != nil {
-		go func(id uint64, title, desc, img string) {
-			ctxShort, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("[co2] recover panic: %v", r)
-				}
-			}()
-			val, err := s.co2Estimator.Estimate(ctxShort, title, desc, img)
-			if err != nil {
-				return
-			}
-			_ = s.repo.UpdateCO2(ctxShort, id, &val)
-		}(item.ID, item.Title, item.Description, *imageURL)
 	}
 	return item, nil
 }
@@ -144,8 +129,16 @@ func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID stri
 	if price > 0 {
 		fields["price"] = price
 	}
+	needsReset := false
 	if imageURL != nil {
 		fields["image_url"] = imageURL
+		needsReset = true
+	}
+	if title != "" || description != "" {
+		needsReset = true
+	}
+	if needsReset {
+		fields["co2_kg"] = nil
 	}
 	if categorySlug != "" {
 		fields["category_slug"] = strings.TrimSpace(categorySlug)
@@ -173,4 +166,38 @@ func (s *itemService) DeleteOwned(ctx context.Context, id uint64, sellerUID stri
 		return err
 	}
 	return nil
+}
+
+func (s *itemService) EstimateCO2(ctx context.Context, id uint64, sellerUID string) (*float64, error) {
+	if s.co2Estimator == nil {
+		return nil, errors.New("co2 estimator not configured")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[co2-estimate] recover panic: %v", r)
+		}
+	}()
+	item, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if item.SellerUID != sellerUID {
+		return nil, errors.New("forbidden")
+	}
+	if item.ImageURL == nil || strings.TrimSpace(*item.ImageURL) == "" {
+		return nil, errors.New("image is required for estimation")
+	}
+	ctxShort, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	val, err := s.co2Estimator.Estimate(ctxShort, item.Title, item.Description, *item.ImageURL)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.UpdateCO2Force(ctxShort, id, &val); err != nil {
+		return nil, err
+	}
+	return &val, nil
 }

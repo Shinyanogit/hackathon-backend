@@ -211,3 +211,28 @@ func (h *ItemHandler) Delete(c echo.Context) error {
 	}
 	return c.NoContent(http.StatusNoContent)
 }
+
+func (h *ItemHandler) EstimateCO2(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid id"))
+	}
+	val, err := h.svc.EstimateCO2(c.Request().Context(), id, uid)
+	if err != nil {
+		switch err {
+		case service.ErrNotFound:
+			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found"))
+		default:
+			if err.Error() == "forbidden" {
+				return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not owner"))
+			}
+			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+		}
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{"co2Kg": val})
+}
