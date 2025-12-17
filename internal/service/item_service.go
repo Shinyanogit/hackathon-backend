@@ -200,15 +200,15 @@ func (s *itemService) EstimateCO2(ctx context.Context, id uint64, sellerUID stri
 		log.Printf("[co2] rid=%s item=%d stage=validate err=forbidden", rid, itemID)
 		return nil, errors.New("forbidden")
 	}
-	if item.ImageURL == nil || strings.TrimSpace(*item.ImageURL) == "" {
-		log.Printf("[co2] rid=%s item=%d stage=validate err=image_required", rid, itemID)
-		return nil, errors.New("image is required for estimation")
-	}
 	ctxShort, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	ctxShort = co2ctx.WithItemID(ctxShort, itemID)
 	estimateStart := time.Now()
-	val, err := s.co2Estimator.Estimate(ctxShort, item.Title, item.Description, *item.ImageURL)
+	img := ""
+	if item.ImageURL != nil {
+		img = *item.ImageURL
+	}
+	val, err := s.co2Estimator.Estimate(ctxShort, item.Title, item.Description, img)
 	if err != nil {
 		log.Printf("[co2] rid=%s item=%d stage=estimate err=%v", rid, itemID, err)
 		if errors.Is(err, context.DeadlineExceeded) {

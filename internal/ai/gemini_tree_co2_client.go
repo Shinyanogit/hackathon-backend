@@ -3,7 +3,6 @@ package ai
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -34,16 +33,7 @@ func NewTreeCO2Client(httpClient *http.Client) *TreeCO2Client {
 func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageURL string) (float64, error) {
 	rid := co2ctx.RID(ctx)
 	itemID := co2ctx.ItemID(ctx)
-	if imageURL == "" {
-		return 0, fmt.Errorf("image url required")
-	}
 	start := time.Now()
-	img, mime, err := c.fetchImage(ctx, imageURL)
-	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=image_fetch_fail err=%v", rid, itemID, err)
-		return 0, err
-	}
-	fetchDur := time.Since(start)
 	client, err := genai.NewClient(ctx, nil)
 	if err != nil {
 		log.Printf("[co2] rid=%s item=%d stage=client_init err=%v", rid, itemID, err)
@@ -59,12 +49,6 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 	parts := []*genai.Part{
 		genai.NewPartFromText(prompt),
 		genai.NewPartFromText(fmt.Sprintf("タイトル: %s\n説明: %s", title, description)),
-		&genai.Part{
-			InlineData: &genai.Blob{
-				MIMEType: mime,
-				Data:     img,
-			},
-		},
 	}
 	contents := []*genai.Content{
 		genai.NewContentFromParts(parts, genai.RoleUser),
@@ -92,41 +76,6 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 		log.Printf("[co2] rid=%s item=%d stage=parse_fail len=%d text=%q err=%v", rid, itemID, len(res.Text()), text, err)
 		return 0, err
 	}
-	log.Printf("[co2] rid=%s item=%d stage=parse_ok value=%.3f unit=%s fetchMs=%d genMs=%d totalMs=%d", rid, itemID, val, unit, fetchDur.Milliseconds(), genDur.Milliseconds(), time.Since(start).Milliseconds())
+	log.Printf("[co2] rid=%s item=%d stage=parse_ok value=%.3f unit=%s genMs=%d totalMs=%d", rid, itemID, val, unit, genDur.Milliseconds(), time.Since(start).Milliseconds())
 	return val, nil
-}
-
-func (c *TreeCO2Client) fetchImage(ctx context.Context, url string) ([]byte, string, error) {
-	rid := co2ctx.RID(ctx)
-	itemID := co2ctx.ItemID(ctx)
-	fetchStart := time.Now()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=image_fetch_start err=%v", rid, itemID, err)
-		return nil, "", err
-	}
-	log.Printf("[co2] rid=%s item=%d stage=image_fetch_start url=%s", rid, itemID, url)
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=image_fetch_err err=%v", rid, itemID, err)
-		return nil, "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		log.Printf("[co2] rid=%s item=%d stage=image_fetch_status status=%d", rid, itemID, resp.StatusCode)
-		return nil, "", fmt.Errorf("fetch image status %d", resp.StatusCode)
-	}
-	limited := io.LimitReader(resp.Body, 5*1024*1024+1)
-	data, err := io.ReadAll(limited)
-	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=image_fetch_read err=%v", rid, itemID, err)
-		return nil, "", err
-	}
-	if len(data) > 5*1024*1024 {
-		log.Printf("[co2] rid=%s item=%d stage=image_fetch_too_large bytes=%d", rid, itemID, len(data))
-		return nil, "", fmt.Errorf("image too large")
-	}
-	mime := http.DetectContentType(data)
-	log.Printf("[co2] rid=%s item=%d stage=image_fetch_done status=%d contentType=%s bytes=%d durMs=%d", rid, itemID, resp.StatusCode, mime, len(data), time.Since(fetchStart).Milliseconds())
-	return data, mime, nil
 }
