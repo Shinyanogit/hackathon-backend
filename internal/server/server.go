@@ -69,7 +69,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	convHandler := handler.NewConversationHandler(convSvc)
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
-	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo)
+	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo, notificationSvc)
 	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
 
 	var storageClient *storage.Client

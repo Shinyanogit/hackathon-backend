@@ -29,6 +29,7 @@ type purchaseService struct {
 	purchaseRepo repository.PurchaseRepository
 	itemRepo     repository.ItemRepository
 	convRepo     repository.ConversationRepository
+	notify       NotificationService
 }
 
 type PurchaseWithItem struct {
@@ -36,8 +37,8 @@ type PurchaseWithItem struct {
 	Item     *model.Item
 }
 
-func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo repository.ItemRepository, convRepo repository.ConversationRepository) PurchaseService {
-	return &purchaseService{purchaseRepo: purchaseRepo, itemRepo: itemRepo, convRepo: convRepo}
+func NewPurchaseService(purchaseRepo repository.PurchaseRepository, itemRepo repository.ItemRepository, convRepo repository.ConversationRepository, notify NotificationService) PurchaseService {
+	return &purchaseService{purchaseRepo: purchaseRepo, itemRepo: itemRepo, convRepo: convRepo, notify: notify}
 }
 
 func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyerUID string) (*model.Purchase, error) {
@@ -98,6 +99,13 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 		SenderName:     "購入者",
 		Body:           "購入手続きを完了しました。発送用QRコードを使って、コンビニでの発送手続きをお願いします。",
 	})
+	if s.notify != nil {
+		ctxShort, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		title := "商品が購入されました"
+		bodyText := fmt.Sprintf("「%s」が購入されました。発送をお願いします。", item.Title)
+		s.notify.Notify(ctxShort, item.SellerUID, "purchase_created", title, bodyText, &itemID, nil, &p.ID)
+	}
 	return p, nil
 }
 
@@ -140,6 +148,13 @@ func (s *purchaseService) MarkShipped(ctx context.Context, purchaseID uint64, se
 			Body:           "発送手続きが完了しました。追跡番号はコンビニ受付の控えをご確認ください。",
 		})
 	}
+	if s.notify != nil {
+		ctxShort, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		title := "商品が発送されました"
+		bodyText := "出品者が発送完了に更新しました。到着をお待ちください。"
+		s.notify.Notify(ctxShort, p.BuyerUID, "purchase_shipped", title, bodyText, &p.ItemID, &p.ConversationID, &p.ID)
+	}
 	return p, nil
 }
 
@@ -172,6 +187,13 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 			Body:           "商品を受け取りました。ありがとうございました！",
 		})
 	}
+	if s.notify != nil {
+		ctxShort, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		title := "受取完了が報告されました"
+		bodyText := "購入者が受け取り済みに更新しました。取引が完了しました。"
+		s.notify.Notify(ctxShort, p.SellerUID, "purchase_delivered", title, bodyText, &p.ItemID, &p.ConversationID, &p.ID)
+	}
 	return p, nil
 }
 
@@ -203,6 +225,13 @@ func (s *purchaseService) Cancel(ctx context.Context, purchaseID uint64, buyerUI
 			SenderName:     "購入者",
 			Body:           "購入をキャンセルしました。",
 		})
+	}
+	if s.notify != nil {
+		ctxShort, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		title := "購入がキャンセルされました"
+		bodyText := "購入者がキャンセルしました。商品は再び購入可能な状態です。"
+		s.notify.Notify(ctxShort, p.SellerUID, "purchase_canceled", title, bodyText, &p.ItemID, &p.ConversationID, &p.ID)
 	}
 	return p, nil
 }
