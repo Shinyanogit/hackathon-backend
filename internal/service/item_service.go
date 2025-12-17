@@ -17,7 +17,8 @@ type ItemService interface {
 	Get(ctx context.Context, id uint64) (*model.Item, error)
 	List(ctx context.Context, limit, offset int, categorySlug, query, sellerUID string) ([]model.Item, int64, error)
 	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
-	UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error)
+	UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string, status string) (*model.Item, error)
+	DeleteOwned(ctx context.Context, id uint64, sellerUID string) error
 }
 
 type itemService struct {
@@ -56,6 +57,7 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 		ImageURL:     imageURL,
 		CategorySlug: categorySlug,
 		SellerUID:    sellerUID,
+		Status:       model.ItemStatusListed,
 	}
 	if err := s.repo.Create(ctx, item); err != nil {
 		return nil, err
@@ -91,7 +93,7 @@ func (s *itemService) ListBySeller(ctx context.Context, sellerUID string) ([]mod
 	return s.repo.ListBySeller(ctx, sellerUID)
 }
 
-func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string) (*model.Item, error) {
+func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string, status string) (*model.Item, error) {
 	if sellerUID == "" {
 		return nil, errors.New("seller is required")
 	}
@@ -99,6 +101,14 @@ func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID stri
 		return nil, errors.New("imageUrl must be a URL, not data URI")
 	}
 	fields := map[string]interface{}{}
+	if status != "" {
+		switch model.ItemStatus(status) {
+		case model.ItemStatusListed, model.ItemStatusPaused:
+			fields["status"] = model.ItemStatus(status)
+		default:
+			return nil, errors.New("invalid status")
+		}
+	}
 	if title != "" {
 		if len(strings.TrimSpace(title)) > 120 {
 			return nil, errors.New("invalid title")
@@ -127,4 +137,17 @@ func (s *itemService) UpdateOwned(ctx context.Context, id uint64, sellerUID stri
 		return nil, err
 	}
 	return s.Get(ctx, id)
+}
+
+func (s *itemService) DeleteOwned(ctx context.Context, id uint64, sellerUID string) error {
+	if sellerUID == "" {
+		return errors.New("seller is required")
+	}
+	if err := s.repo.DeleteBySeller(ctx, id, sellerUID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return nil
 }

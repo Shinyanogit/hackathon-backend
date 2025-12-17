@@ -15,6 +15,8 @@ type ItemRepository interface {
 	FindByImageURL(ctx context.Context, imageURL string) (*model.Item, error)
 	ListBySeller(ctx context.Context, sellerUID string) ([]model.Item, error)
 	UpdateBySeller(ctx context.Context, id uint64, sellerUID string, fields map[string]interface{}) error
+	UpdateStatus(ctx context.Context, id uint64, status model.ItemStatus) error
+	DeleteBySeller(ctx context.Context, id uint64, sellerUID string) error
 	SetDB(db *gorm.DB)
 }
 
@@ -44,6 +46,7 @@ func (r *itemRepository) List(ctx context.Context, limit, offset int, categorySl
 		total int64
 	)
 	q := r.db.WithContext(ctx).Model(&model.Item{})
+	q = q.Where("(status IS NULL OR status = ?)", model.ItemStatusListed)
 	if categorySlug != "" {
 		q = q.Where("category_slug = ?", categorySlug)
 	}
@@ -100,6 +103,33 @@ func (r *itemRepository) UpdateBySeller(ctx context.Context, id uint64, sellerUI
 		Model(&model.Item{}).
 		Where("id = ? AND seller_uid = ?", id, sellerUID).
 		Updates(fields)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *itemRepository) UpdateStatus(ctx context.Context, id uint64, status model.ItemStatus) error {
+	res := r.db.WithContext(ctx).
+		Model(&model.Item{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{"status": status})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (r *itemRepository) DeleteBySeller(ctx context.Context, id uint64, sellerUID string) error {
+	res := r.db.WithContext(ctx).
+		Where("id = ? AND seller_uid = ?", id, sellerUID).
+		Delete(&model.Item{})
 	if res.Error != nil {
 		return res.Error
 	}

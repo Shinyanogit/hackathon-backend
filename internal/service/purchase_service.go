@@ -57,6 +57,12 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 	if item.SellerUID == buyerUID {
 		return nil, errors.New("cannot buy your own item")
 	}
+	if item.Status == model.ItemStatusPaused {
+		return nil, errors.New("item is paused")
+	}
+	if item.Status == model.ItemStatusSold {
+		return nil, ErrAlreadyPurchased
+	}
 	if existing, err := s.purchaseRepo.FindByItem(ctx, itemID); err == nil && existing != nil {
 		if existing.Status != model.PurchaseStatusCanceled {
 			return existing, ErrAlreadyPurchased
@@ -85,6 +91,7 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 	if err := s.purchaseRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
+	_ = s.itemRepo.UpdateStatus(ctx, itemID, model.ItemStatusSold)
 	_ = s.convRepo.CreateMessage(ctx, &model.Message{
 		ConversationID: cv.ID,
 		SenderUID:      buyerUID,
@@ -187,6 +194,7 @@ func (s *purchaseService) Cancel(ctx context.Context, purchaseID uint64, buyerUI
 	if err := s.purchaseRepo.Update(ctx, p); err != nil {
 		return nil, err
 	}
+	_ = s.itemRepo.UpdateStatus(ctx, p.ItemID, model.ItemStatusListed)
 	if p.ConversationID != 0 {
 		_ = s.convRepo.CreateMessage(ctx, &model.Message{
 			ConversationID: p.ConversationID,

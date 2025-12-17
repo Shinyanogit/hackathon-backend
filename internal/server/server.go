@@ -108,6 +108,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	if authMw != nil {
 		api.POST("/items", itemHandler.Create, authMw.RequireAuth)
 		api.PUT("/items/:id", itemHandler.Update, authMw.RequireAuth)
+		api.DELETE("/items/:id", itemHandler.Delete, authMw.RequireAuth)
 		api.GET("/me/items", itemHandler.ListMine, authMw.RequireAuth)
 		api.GET("/me/purchases", purchaseHandler.ListMine, authMw.RequireAuth)
 		api.GET("/me/sales", purchaseHandler.ListSales, authMw.RequireAuth)
@@ -130,6 +131,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	} else {
 		api.POST("/items", itemHandler.Create)
 		api.PUT("/items/:id", itemHandler.Update)
+		api.DELETE("/items/:id", itemHandler.Delete)
 		api.GET("/me/items", itemHandler.ListMine)
 		api.GET("/me/purchases", purchaseHandler.ListMine)
 		api.GET("/me/sales", purchaseHandler.ListSales)

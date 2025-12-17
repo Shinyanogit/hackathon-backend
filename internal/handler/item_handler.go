@@ -23,6 +23,7 @@ type ItemResponse struct {
 	Title        string  `json:"title"`
 	Description  string  `json:"description"`
 	Price        uint    `json:"price"`
+	Status       string  `json:"status"`
 	ImageURL     *string `json:"imageUrl"`
 	CategorySlug string  `json:"categorySlug"`
 	SellerUID    string  `json:"sellerUid"`
@@ -70,6 +71,10 @@ func (h *ItemHandler) Get(c echo.Context) error {
 		}
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch item"))
 	}
+	uid, _ := c.Get("uid").(string)
+	if item.Status == model.ItemStatusPaused && uid != item.SellerUID {
+		return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found"))
+	}
 	return c.JSON(http.StatusOK, toItemResponse(item))
 }
 
@@ -95,11 +100,16 @@ func (h *ItemHandler) List(c echo.Context) error {
 }
 
 func toItemResponse(item *model.Item) ItemResponse {
+	status := item.Status
+	if status == "" {
+		status = model.ItemStatusListed
+	}
 	return ItemResponse{
 		ID:           item.ID,
 		Title:        item.Title,
 		Description:  item.Description,
 		Price:        item.Price,
+		Status:       string(status),
 		ImageURL:     item.ImageURL,
 		CategorySlug: item.CategorySlug,
 		SellerUID:    item.SellerUID,
@@ -133,6 +143,7 @@ type UpdateItemRequest struct {
 	Price        *uint   `json:"price"`
 	ImageURL     *string `json:"imageUrl"`
 	CategorySlug *string `json:"categorySlug"`
+	Status       *string `json:"status"`
 }
 
 func (h *ItemHandler) Update(c echo.Context) error {
@@ -166,7 +177,11 @@ func (h *ItemHandler) Update(c echo.Context) error {
 	if req.CategorySlug != nil {
 		category = *req.CategorySlug
 	}
-	item, err := h.svc.UpdateOwned(c.Request().Context(), id, uid, title, description, price, imageURL, category)
+	status := ""
+	if req.Status != nil {
+		status = *req.Status
+	}
+	item, err := h.svc.UpdateOwned(c.Request().Context(), id, uid, title, description, price, imageURL, category, status)
 	if err != nil {
 		if err == service.ErrNotFound {
 			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found or not owner"))
@@ -174,4 +189,23 @@ func (h *ItemHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
 	}
 	return c.JSON(http.StatusOK, toItemResponse(item))
+}
+
+func (h *ItemHandler) Delete(c echo.Context) error {
+	uid, _ := c.Get("uid").(string)
+	if uid == "" {
+		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
+	}
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid id"))
+	}
+	if err := h.svc.DeleteOwned(c.Request().Context(), id, uid); err != nil {
+		if err == service.ErrNotFound {
+			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found or not owner"))
+		}
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+	}
+	return c.NoContent(http.StatusNoContent)
 }
