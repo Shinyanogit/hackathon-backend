@@ -24,6 +24,7 @@ type ItemService interface {
 	UpdateOwned(ctx context.Context, id uint64, sellerUID string, title, description string, price uint, imageURL *string, categorySlug string, status string) (*model.Item, error)
 	DeleteOwned(ctx context.Context, id uint64, sellerUID string) error
 	EstimateCO2(ctx context.Context, id uint64, sellerUID string) (*float64, error)
+	EstimateCO2Preview(ctx context.Context, title, description string, price uint, imageURL string) (*float64, error)
 }
 
 type itemService struct {
@@ -261,5 +262,33 @@ func (s *itemService) EstimateCO2(ctx context.Context, id uint64, sellerUID stri
 		return nil, err
 	}
 	log.Printf("[co2] rid=%s item=%d stage=db_update rows=%d durMs=%d", rid, itemID, rows, time.Since(dbStart).Milliseconds())
+	return &val, nil
+}
+
+func (s *itemService) EstimateCO2Preview(ctx context.Context, title, description string, price uint, imageURL string) (*float64, error) {
+	if s.co2Estimator == nil {
+		return nil, errors.New("co2 estimator not configured")
+	}
+	title = strings.TrimSpace(title)
+	description = strings.TrimSpace(description)
+	if title == "" || description == "" {
+		return nil, errors.New("title and description are required")
+	}
+	ctxShort, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+	rid := co2ctx.RID(ctxShort)
+	itemID := co2ctx.ItemID(ctxShort)
+	log.Printf("[co2] rid=%s item=%d stage=preview_start titleLen=%d descLen=%d img=%t price=%d", rid, itemID, len(title), len(description), strings.TrimSpace(imageURL) != "", price)
+	val, err := s.co2Estimator.Estimate(ctxShort, title, description, imageURL)
+	if err != nil {
+		log.Printf("[co2] rid=%s item=%d stage=preview_estimate_err err=%v", rid, itemID, err)
+		return nil, err
+	}
+	limit := float64(price) * 0.05
+	if val > limit {
+		log.Printf("[co2] rid=%s item=%d stage=preview_cap raw=%.3f cap=%.3f", rid, itemID, val, limit)
+		val = limit
+	}
+	log.Printf("[co2] rid=%s item=%d stage=preview_done value=%.3f", rid, itemID, val)
 	return &val, nil
 }

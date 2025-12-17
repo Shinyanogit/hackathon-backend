@@ -275,3 +275,35 @@ func (h *ItemHandler) EstimateCO2(c echo.Context) error {
 	log.Printf("[co2] rid=%s item=%d stage=finish status=200 totalMs=%d", rid, id, time.Since(start).Milliseconds())
 	return c.JSON(http.StatusOK, map[string]interface{}{"co2Kg": val})
 }
+
+type estimatePreviewRequest struct {
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Price       uint    `json:"price"`
+	ImageURL    *string `json:"imageUrl,omitempty"`
+}
+
+func (h *ItemHandler) EstimateCO2Preview(c echo.Context) error {
+	rid := uuid.New().String()
+	ctx := co2ctx.WithRID(c.Request().Context(), rid)
+	var req estimatePreviewRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
+	}
+	if strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Description) == "" {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "title and description are required"))
+	}
+	price := req.Price
+	img := ""
+	if req.ImageURL != nil {
+		img = *req.ImageURL
+	}
+	val, err := h.svc.EstimateCO2Preview(ctx, req.Title, req.Description, price, img)
+	if err != nil {
+		if err.Error() == "timeout" || errors.Is(err, context.DeadlineExceeded) {
+			return c.JSON(http.StatusGatewayTimeout, NewErrorResponse("gateway_timeout", "estimation timed out"))
+		}
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{"co2Kg": val, "rid": rid})
+}

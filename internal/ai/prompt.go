@@ -10,6 +10,7 @@ Hard rules (must follow):
 * Do NOT add, remove, or hallucinate any parts of the product or accessories.
 * Do NOT "beautify" the product surface. Preserve every mark and imperfection exactly as-is.
 * Keep the product in the same position and perspective (no rotation or re-framing that changes its appearance).
+* Do NOT change the composition: keep the framing, orientation, and product scale identical. Do not crop or zoom differently.
 * Only edit the environment: background/desk/floor/walls, lighting, shadows, and remove unrelated clutter around the product.
 * Output must look photorealistic, like a product-style photo shot in natural soft daylight.
 
@@ -53,6 +54,7 @@ var stylePrompts = map[string]string{
 }
 
 const safetySuffix = `If the product surface looks cleaner than the input, revert: the product must be identical to the input photo. Only the background and lighting may change.
+Do not alter composition, orientation, or scale. Background should be clean white; product remains untouched.
 No text, no watermark, no added props.`
 
 // BuildEnhancePrompt concatenates base, style, and safety prompts. Mode fallback defaults to fashion-look.
