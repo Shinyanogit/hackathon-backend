@@ -67,13 +67,15 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 	genDur := time.Since(genStart)
 	log.Printf("[co2] rid=%s item=%d stage=gemini_done model=%s genMs=%d", rid, itemID, c.model, genDur.Milliseconds())
 	log.Printf("[co2] rid=%s item=%d stage=parse_start", rid, itemID)
-	val, unit, err := ParseCO2WithUnit(res.Text())
+	rawText := res.Text()
+	log.Printf("[co2] rid=%s item=%d stage=gemini_output len=%d text=%q", rid, itemID, len(rawText), rawText)
+	val, unit, err := ParseCO2WithUnit(rawText)
 	if err != nil {
-		text := strings.ReplaceAll(res.Text(), "\n", " ")
+		text := strings.ReplaceAll(rawText, "\n", " ")
 		if len(text) > 80 {
 			text = text[:80]
 		}
-		log.Printf("[co2] rid=%s item=%d stage=parse_fail len=%d text=%q err=%v", rid, itemID, len(res.Text()), text, err)
+		log.Printf("[co2] rid=%s item=%d stage=parse_fail len=%d text=%q err=%v", rid, itemID, len(rawText), text, err)
 		return 0, err
 	}
 	log.Printf("[co2] rid=%s item=%d stage=parse_ok value=%.3f unit=%s genMs=%d totalMs=%d", rid, itemID, val, unit, genDur.Milliseconds(), time.Since(start).Milliseconds())
