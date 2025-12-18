@@ -86,19 +86,21 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 	if usePoints < 0 {
 		usePoints = 0
 	}
+	// clamp to item price (integer)
+	usePointsInt := int64(usePoints)
+	if item != nil && usePointsInt > int64(item.Price) {
+		usePointsInt = int64(item.Price)
+	}
+	usePoints = float64(usePointsInt)
 	// charge points (balance check) before creating purchase
 	if s.treeSvc != nil && usePoints > 0 {
 		if _, _, err := s.treeSvc.Deduct(ctx, buyerUID, usePoints); err != nil {
 			return nil, err
 		}
 	}
-	paidYen := int64(item.Price)
-	if s.treeSvc != nil && usePoints > 0 {
-		deduction := int64(usePoints)
-		if deduction > paidYen {
-			deduction = paidYen
-		}
-		paidYen = paidYen - deduction
+	paidYen := int64(item.Price) - usePointsInt
+	if paidYen < 0 {
+		paidYen = 0
 	}
 	p := &model.Purchase{
 		ItemID:         itemID,
@@ -217,11 +219,8 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 	// 売上計上: 価格の90%をセンチ単位で加算
 	if s.revenueSvc != nil {
 		if item, err := s.itemRepo.FindByID(ctx, p.ItemID); err == nil {
-			// ベース金額は支払額(PaidYen)があればそれを、無ければ商品価格
-			amountYen := p.PaidYen
-			if amountYen <= 0 {
-				amountYen = int64(item.Price)
-			}
+			// 売上計上は商品価格ベースで90%（整数切り捨て）
+			amountYen := int64(item.Price)
 			if amountYen < 0 {
 				amountYen = 0
 			}
