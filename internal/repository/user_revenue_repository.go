@@ -2,17 +2,18 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 type UserWallet struct {
-	UID        string `gorm:"column:uid;primaryKey;size:128"`
-	BalanceYen int64  `gorm:"column:revenue_balance_yen;not null;default:0"`
-	TotalYen   int64  `gorm:"column:revenue_total_yen;not null;default:0"`
-	CreatedAt  int64  `gorm:"autoCreateTime"`
-	UpdatedAt  int64  `gorm:"autoUpdateTime"`
+	UID        string    `gorm:"column:uid;primaryKey;size:128"`
+	BalanceYen int64     `gorm:"column:revenue_balance_yen;not null;default:0"`
+	TotalYen   int64     `gorm:"column:revenue_total_yen;not null;default:0"`
+	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt  time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (UserWallet) TableName() string { return "users" }
@@ -41,6 +42,7 @@ func (r *userRevenueRepository) Add(ctx context.Context, uid string, yen int64) 
 		DoUpdates: clause.Assignments(map[string]interface{}{
 			"revenue_balance_yen": gorm.Expr("COALESCE(revenue_balance_yen,0) + ?", yen),
 			"revenue_total_yen":   gorm.Expr("COALESCE(revenue_total_yen,0) + ?", yen),
+			"updated_at":          gorm.Expr("NOW()"),
 		}),
 	}).Create(&UserWallet{UID: uid, BalanceYen: yen, TotalYen: yen}).Error
 }
