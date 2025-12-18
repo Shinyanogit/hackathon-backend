@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 	"time"
 
@@ -188,7 +187,6 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 		return nil, ErrForbidden
 	}
 	if p.Status == model.PurchaseStatusDelivered {
-		log.Printf("[revenue] purchase=%d item=%d stage=already_delivered", purchaseID, p.ItemID)
 		return p, nil
 	}
 	rows, err := s.purchaseRepo.MarkDeliveredIfPending(ctx, purchaseID, buyerUID)
@@ -196,7 +194,6 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 		return nil, err
 	}
 	if rows == 0 {
-		log.Printf("[revenue] purchase=%d item=%d stage=already_marked", purchaseID, p.ItemID)
 		return p, nil
 	}
 	// consume reserved points at completion time
@@ -208,7 +205,6 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 		}
 		if toDeduct > 0 {
 			if _, _, err := s.treeSvc.Deduct(ctx, p.BuyerUID, toDeduct); err != nil {
-				log.Printf("[revenue] purchase=%d item=%d stage=points_deduct_failed buyer=%s points=%.2f err=%v", purchaseID, p.ItemID, p.BuyerUID, toDeduct, err)
 			}
 		}
 	}
@@ -233,13 +229,7 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 				amountYen = 0
 			}
 			credit := amountYen * 90 / 100 // 90% を整数切り捨てで計上
-			if addErr := s.revenueSvc.Add(ctx, p.SellerUID, credit); addErr != nil {
-				log.Printf("[revenue] purchase=%d item=%d stage=credit_add_failed seller=%s price=%d credit=%d err=%v", purchaseID, p.ItemID, p.SellerUID, amountYen, credit, addErr)
-			} else {
-				log.Printf("[revenue] purchase=%d item=%d stage=credit_added seller=%s price=%d credit=%d", purchaseID, p.ItemID, p.SellerUID, amountYen, credit)
-			}
-		} else {
-			log.Printf("[revenue] purchase=%d item=%d stage=item_fetch_failed seller=%s err=%v", purchaseID, p.ItemID, p.SellerUID, err)
+			_ = s.revenueSvc.Add(ctx, p.SellerUID, credit)
 		}
 	}
 	if s.notify != nil {
