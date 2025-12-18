@@ -26,6 +26,8 @@ type PurchaseResponse struct {
 	SellerUID      string  `json:"sellerUid"`
 	ConversationID uint64  `json:"conversationId"`
 	Status         string  `json:"status"`
+	PointsUsed     float64 `json:"pointsUsed"`
+	PaidYen        int64   `json:"paidYen"`
 	ShippingQRURL  string  `json:"shippingQrUrl"`
 	ShippingNote   string  `json:"shippingNote"`
 	ShippedAt      *string `json:"shippedAt,omitempty"`
@@ -51,6 +53,8 @@ func toPurchaseResponse(p *model.Purchase) PurchaseResponse {
 		SellerUID:      p.SellerUID,
 		ConversationID: p.ConversationID,
 		Status:         string(p.Status),
+		PointsUsed:     p.PointsUsed,
+		PaidYen:        p.PaidYen,
 		ShippingQRURL:  p.ShippingQRURL,
 		ShippingNote:   p.ShippingNote,
 		ShippedAt:      shippedAt,

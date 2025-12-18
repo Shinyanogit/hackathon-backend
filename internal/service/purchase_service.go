@@ -87,18 +87,11 @@ func (s *purchaseService) PurchaseItem(ctx context.Context, itemID uint64, buyer
 	if usePoints < 0 {
 		usePoints = 0
 	}
-	// clamp to item price (integer)
 	usePointsInt := int64(usePoints)
 	if item != nil && usePointsInt > int64(item.Price) {
 		usePointsInt = int64(item.Price)
 	}
 	usePoints = float64(usePointsInt)
-	// charge points (balance check) before creating purchase
-	if s.treeSvc != nil && usePoints > 0 {
-		if _, _, err := s.treeSvc.Deduct(ctx, buyerUID, usePoints); err != nil {
-			return nil, err
-		}
-	}
 	paidYen := int64(item.Price) - usePointsInt
 	if paidYen < 0 {
 		paidYen = 0
@@ -205,6 +198,19 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 	if rows == 0 {
 		log.Printf("[revenue] purchase=%d item=%d stage=already_marked", purchaseID, p.ItemID)
 		return p, nil
+	}
+	// consume reserved points at completion time
+	if s.treeSvc != nil && p.PointsUsed > 0 {
+		_, balance, balErr := s.treeSvc.Get(ctx, p.BuyerUID)
+		toDeduct := p.PointsUsed
+		if balErr == nil && balance < toDeduct {
+			toDeduct = balance
+		}
+		if toDeduct > 0 {
+			if _, _, err := s.treeSvc.Deduct(ctx, p.BuyerUID, toDeduct); err != nil {
+				log.Printf("[revenue] purchase=%d item=%d stage=points_deduct_failed buyer=%s points=%.2f err=%v", purchaseID, p.ItemID, p.BuyerUID, toDeduct, err)
+			}
+		}
 	}
 	now := time.Now()
 	p.Status = model.PurchaseStatusDelivered
