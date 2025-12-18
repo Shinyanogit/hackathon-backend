@@ -239,7 +239,14 @@ func (s *purchaseService) MarkDelivered(ctx context.Context, purchaseID uint64, 
 	if s.treeSvc != nil {
 		if item, err := s.itemRepo.FindByID(ctx, p.ItemID); err == nil {
 			if item.Co2Kg != nil {
-				treePoints := *item.Co2Kg / 10.0
+				raw := *item.Co2Kg / 10.0
+				treePoints := raw
+				if raw > 0 {
+					treePoints = float64(int64(raw + 0.5))
+					if treePoints < 1 {
+						treePoints = 1
+					}
+				}
 				_ = s.treeSvc.Add(ctx, p.BuyerUID, treePoints)
 				_ = s.treeSvc.Add(ctx, p.SellerUID, treePoints)
 			}

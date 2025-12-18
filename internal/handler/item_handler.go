@@ -136,12 +136,18 @@ func (h *ItemHandler) ListMine(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch items"))
 	}
-	resp := ItemListResponse{
-		Items: make([]ItemResponse, 0, len(items)),
-		Total: int64(len(items)),
+	filtered := make([]model.Item, 0, len(items))
+	for _, it := range items {
+		if it.Status == "" || it.Status == model.ItemStatusListed {
+			filtered = append(filtered, it)
+		}
 	}
-	for i := range items {
-		resp.Items = append(resp.Items, toItemResponse(&items[i]))
+	resp := ItemListResponse{
+		Items: make([]ItemResponse, 0, len(filtered)),
+		Total: int64(len(filtered)),
+	}
+	for i := range filtered {
+		resp.Items = append(resp.Items, toItemResponse(&filtered[i]))
 	}
 	return c.JSON(http.StatusOK, resp)
 }
