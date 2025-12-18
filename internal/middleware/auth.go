@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"encoding/base64"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -41,10 +40,7 @@ func NewAuthMiddleware(ctx context.Context) (*AuthMiddleware, error) {
 			decoded = []byte(jsonStr)
 		}
 		opts = append(opts, option.WithCredentialsJSON(decoded))
-		log.Printf("firebase auth init: using FIREBASE_CREDENTIALS_JSON for credentials")
 	}
-
-	log.Printf("firebase auth init: env_project=%s default_creds_project=%s", projectID, credProject)
 
 	app, err := firebase.NewApp(ctx, &firebase.Config{ProjectID: projectID}, opts...)
 	if err != nil {

@@ -3,13 +3,11 @@ package ai
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/shinyyama/hackathon-backend/internal/co2ctx"
 	"google.golang.org/genai"
 )
 
@@ -31,12 +29,8 @@ func NewTreeCO2Client(httpClient *http.Client) *TreeCO2Client {
 
 // Estimate takes title/description and image URL, calls Gemini, and returns co2 kg.
 func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageURL string) (float64, error) {
-	rid := co2ctx.RID(ctx)
-	itemID := co2ctx.ItemID(ctx)
-	start := time.Now()
 	client, err := genai.NewClient(ctx, nil)
 	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=client_init err=%v", rid, itemID, err)
 		return 0, err
 	}
 
@@ -57,27 +51,18 @@ func (c *TreeCO2Client) Estimate(ctx context.Context, title, description, imageU
 	config := &genai.GenerateContentConfig{
 		Temperature: &temp,
 	}
-	genStart := time.Now()
-	log.Printf("[co2] rid=%s item=%d stage=gemini_start model=%s", rid, itemID, c.model)
 	res, err := client.Models.GenerateContent(ctx, c.model, contents, config)
 	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=gemini_fail model=%s err=%v", rid, itemID, c.model, err)
 		return 0, fmt.Errorf("gemini generate: %w", err)
 	}
-	genDur := time.Since(genStart)
-	log.Printf("[co2] rid=%s item=%d stage=gemini_done model=%s genMs=%d", rid, itemID, c.model, genDur.Milliseconds())
-	log.Printf("[co2] rid=%s item=%d stage=parse_start", rid, itemID)
 	rawText := res.Text()
-	log.Printf("[co2] rid=%s item=%d stage=gemini_output len=%d text=%q", rid, itemID, len(rawText), rawText)
-	val, unit, err := ParseCO2WithUnit(rawText)
+	val, _, err := ParseCO2WithUnit(rawText)
 	if err != nil {
 		text := strings.ReplaceAll(rawText, "\n", " ")
 		if len(text) > 80 {
 			text = text[:80]
 		}
-		log.Printf("[co2] rid=%s item=%d stage=parse_fail len=%d text=%q err=%v", rid, itemID, len(rawText), text, err)
 		return 0, err
 	}
-	log.Printf("[co2] rid=%s item=%d stage=parse_ok value=%.3f unit=%s genMs=%d totalMs=%d", rid, itemID, val, unit, genDur.Milliseconds(), time.Since(start).Milliseconds())
 	return val, nil
 }

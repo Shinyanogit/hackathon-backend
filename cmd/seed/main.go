@@ -50,7 +50,6 @@ func run() (err error) {
 		return err
 	}
 	if !canSeed {
-		log.Printf("items already exist; skipping seed (set FORCE_SEED=true to override)")
 		return nil
 	}
 
@@ -84,7 +83,6 @@ func run() (err error) {
 		return fmt.Errorf("commit: %w", err)
 	}
 
-	log.Printf("seeded %d items", len(items))
 	return nil
 }
 

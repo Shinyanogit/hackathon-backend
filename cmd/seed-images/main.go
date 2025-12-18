@@ -75,17 +75,7 @@ func main() {
 	}
 	defer sqlDB.Close()
 
-	log.Printf("gemini model: %s", cfg.GeminiModel)
-	if strings.HasPrefix(strings.TrimPrefix(cfg.GeminiModel, "models/"), "imagen-") {
-		log.Printf("gemini endpoint: https://generativelanguage.googleapis.com/v1beta/models/%s:predict", strings.TrimPrefix(cfg.GeminiModel, "models/"))
-	} else {
-		log.Printf("gemini endpoint: https://generativelanguage.googleapis.com/v1beta/%s:generateContent", cfg.GeminiModel)
-	}
-	log.Printf("gemini api key set: %v", cfg.GeminiAPIKey != "")
-
-	if err := db.AutoMigrate(&model.Item{}); err != nil {
-		log.Printf("warn: automigrate failed: %v", err)
-	}
+	_ = db.AutoMigrate(&model.Item{})
 
 	storageClient, err := storage.NewClient(ctx)
 	if err != nil {
@@ -105,10 +95,8 @@ func main() {
 		}
 
 		for _, p := range prompts {
-			log.Printf("processing slug=%s", p.Slug)
 			imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, cfg.GeminiModel, p)
 			if err != nil {
-				log.Printf("gemini failed (%s), fallback to placeholder: %v", p.Slug, err)
 				imageBytes, err = fetchPlaceholder(ctx, p.Slug)
 				if err != nil {
 					log.Fatalf("failed to fetch placeholder: %v", err)
@@ -125,21 +113,16 @@ func main() {
 				log.Fatalf("upsert failed for %s: %v", p.Slug, err)
 			}
 
-			log.Printf("done slug=%s url=%s", p.Slug, publicURL)
 		}
 	}
-
-	log.Println("seed-images completed successfully")
 }
 
 func connectDB(cfg Config) (*gorm.DB, error) {
 	var dsn string
 	if strings.HasPrefix(cfg.DBHost, "/cloudsql/") {
-		log.Printf("db connect via unix socket: %s", cfg.DBHost)
 		dsn = fmt.Sprintf("%s:%s@unix(%s)/%s?parseTime=true&charset=utf8mb4&loc=Local",
 			cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBName)
 	} else {
-		log.Printf("db connect via tcp: %s:%s", cfg.DBHost, cfg.DBPort)
 		dsn = fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=Local",
 			cfg.DBUser, cfg.DBPassword, cfg.DBHost, cfg.DBPort, cfg.DBName)
 	}
@@ -313,9 +296,7 @@ func updateExistingItems(ctx context.Context, cfg Config, db *gorm.DB, storageCl
 	if err := db.WithContext(ctx).Model(&model.Item{}).Find(&items).Error; err != nil {
 		return err
 	}
-	log.Printf("update mode: target items=%d (regenerate all images)", len(items))
 	for _, it := range items {
-		log.Printf("[item %d] start title=%s", it.ID, it.Title)
 		prompt := Prompt{
 			Slug: fmt.Sprintf("item-%d", it.ID),
 			Prompt: fmt.Sprintf("Product photo for an online marketplace item titled '%s' in category '%s'. Clean studio lighting, simple background, high resolution.",
@@ -324,29 +305,21 @@ func updateExistingItems(ctx context.Context, cfg Config, db *gorm.DB, storageCl
 
 		imageBytes, err := generateImage(ctx, cfg.GeminiAPIKey, cfg.GeminiModel, prompt)
 		if err != nil {
-			log.Printf("[item %d] gemini failed, fallback to picsum: %v", it.ID, err)
 			imageBytes, err = fetchPlaceholder(ctx, prompt.Slug)
 			if err != nil {
-				log.Printf("[item %d] fallback failed: %v", it.ID, err)
 				continue
 			}
-		} else {
-			log.Printf("[item %d] gemini success", it.ID)
 		}
 
 		path := fmt.Sprintf("items/sample/%d.png", it.ID)
 		publicURL, err := uploadWithToken(ctx, storageClient, cfg.StorageBucket, path, imageBytes)
 		if err != nil {
-			log.Printf("[item %d] upload failed: %v", it.ID, err)
 			continue
 		}
-		log.Printf("[item %d] upload success: %s", it.ID, publicURL)
 
 		if err := db.WithContext(ctx).Model(&model.Item{}).Where("id = ?", it.ID).Update("image_url", publicURL).Error; err != nil {
-			log.Printf("[item %d] db update failed: %v", it.ID, err)
 			continue
 		}
-		log.Printf("[item %d] db update success", it.ID)
 	}
 	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"mime"
 	"net/http"
 	"net/url"
@@ -159,7 +158,6 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 	if resp.StatusCode >= 300 {
 		var buf bytes.Buffer
 		_, _ = io.CopyN(&buf, resp.Body, 2048)
-		log.Printf("gemini upstream error: status=%d url=%s body=%q", resp.StatusCode, redactKey(endpoint), buf.String())
 		return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", "gemini returned error"))
 	}
 	var gResp geminiResponse
@@ -173,7 +171,6 @@ func (h *AIHandler) AskItem(c echo.Context) error {
 	if answer == "" {
 		answer = "回答を生成できませんでした。"
 	}
-	log.Printf("gemini success: model=%s answer_len=%d preview=%q", os.Getenv("GEMINI_MODEL"), len(answer), truncate(answer, 200))
 	return c.JSON(http.StatusOK, map[string]string{"answer": answer})
 }
 
@@ -301,7 +298,6 @@ func (h *AIHandler) EnhanceImage(c echo.Context) error {
 	origPath := fmt.Sprintf("items/%s/%d_orig%s", uid, now, ext)
 	origURL, err := uploadWithToken(ctx, h.storage, h.storageBucket, origPath, contentType, imageBytes)
 	if err != nil {
-		log.Printf("upload original failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to store original image"))
 	}
 
@@ -315,14 +311,12 @@ func (h *AIHandler) EnhanceImage(c echo.Context) error {
 		Mode:       mode,
 	})
 	if err != nil {
-		log.Printf("gemini enhance failed: %v", err)
 		return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", "failed to enhance image"))
 	}
 
 	enhancedPath := fmt.Sprintf("items/%s/%d_enh_%s.jpg", uid, now, mode)
 	enhURL, err := uploadWithToken(ctx, h.storage, h.storageBucket, enhancedPath, "image/jpeg", result.Image)
 	if err != nil {
-		log.Printf("upload enhanced failed: %v", err)
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to store enhanced image"))
 	}
 

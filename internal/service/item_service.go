@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -84,27 +83,19 @@ func (s *itemService) Create(ctx context.Context, title, description string, pri
 		}
 		go func(id uint64, t, d, imgURL string, price uint) {
 			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("[co2] item=%d stage=create_panic panic=%v", id, r)
-				}
+				_ = recover()
 			}()
 			ctxShort, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 			defer cancel()
 			val, err := s.co2Estimator.Estimate(ctxShort, t, d, imgURL)
 			if err != nil {
-				log.Printf("[co2] item=%d stage=create_estimate_err err=%v", id, err)
 				return
 			}
 			limit := float64(price) * 0.05
 			if val > limit {
-				log.Printf("[co2] item=%d stage=create_cap raw=%.3f cap=%.3f", id, val, limit)
 				val = limit
 			}
-			if rows, err := s.repo.UpdateCO2(ctxShort, id, &val); err != nil {
-				log.Printf("[co2] item=%d stage=create_db_err err=%v", id, err)
-			} else {
-				log.Printf("[co2] item=%d stage=create_db rows=%d", id, rows)
-			}
+			_, _ = s.repo.UpdateCO2(ctxShort, id, &val)
 		}(item.ID, item.Title, item.Description, img, item.Price)
 	}
 	return item, nil
@@ -204,56 +195,43 @@ func (s *itemService) EstimateCO2(ctx context.Context, id uint64, sellerUID stri
 	if s.co2Estimator == nil {
 		return nil, errors.New("co2 estimator not configured")
 	}
-	rid := co2ctx.RID(ctx)
-	itemID := id
-	log.Printf("[co2] rid=%s item=%d stage=start", rid, itemID)
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[co2] rid=%s item=%d panic=%v", rid, itemID, r)
+			_ = r
 		}
 	}()
 	item, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=find err=%v", rid, itemID, err)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
 	if item.SellerUID != sellerUID {
-		log.Printf("[co2] rid=%s item=%d stage=validate err=forbidden", rid, itemID)
 		return nil, errors.New("forbidden")
 	}
 	ctxShort, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
-	ctxShort = co2ctx.WithItemID(ctxShort, itemID)
-	estimateStart := time.Now()
+	ctxShort = co2ctx.WithItemID(ctxShort, id)
 	img := ""
 	if item.ImageURL != nil {
 		img = *item.ImageURL
 	}
 	val, err := s.co2Estimator.Estimate(ctxShort, item.Title, item.Description, img)
 	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=estimate err=%v", rid, itemID, err)
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("timeout")
 		}
 		return nil, err
 	}
-	log.Printf("[co2] rid=%s item=%d stage=estimate_done durMs=%d", rid, itemID, time.Since(estimateStart).Milliseconds())
 	// cap co2 to 5% of price
 	limit := float64(item.Price) * 0.05
 	if val > limit {
-		log.Printf("[co2] rid=%s item=%d stage=cap applied raw=%.3f cap=%.3f", rid, itemID, val, limit)
 		val = limit
 	}
-	dbStart := time.Now()
-	rows, err := s.repo.UpdateCO2Force(ctxShort, id, &val)
-	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=db_update_err err=%v", rid, itemID, err)
+	if _, err := s.repo.UpdateCO2Force(ctxShort, id, &val); err != nil {
 		return nil, err
 	}
-	log.Printf("[co2] rid=%s item=%d stage=db_update rows=%d durMs=%d", rid, itemID, rows, time.Since(dbStart).Milliseconds())
 	return &val, nil
 }
 
@@ -268,19 +246,13 @@ func (s *itemService) EstimateCO2Preview(ctx context.Context, title, description
 	}
 	ctxShort, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
-	rid := co2ctx.RID(ctxShort)
-	itemID := co2ctx.ItemID(ctxShort)
-	log.Printf("[co2] rid=%s item=%d stage=preview_start titleLen=%d descLen=%d img=%t price=%d", rid, itemID, len(title), len(description), strings.TrimSpace(imageURL) != "", price)
 	val, err := s.co2Estimator.Estimate(ctxShort, title, description, imageURL)
 	if err != nil {
-		log.Printf("[co2] rid=%s item=%d stage=preview_estimate_err err=%v", rid, itemID, err)
 		return nil, err
 	}
 	limit := float64(price) * 0.05
 	if val > limit {
-		log.Printf("[co2] rid=%s item=%d stage=preview_cap raw=%.3f cap=%.3f", rid, itemID, val, limit)
 		val = limit
 	}
-	log.Printf("[co2] rid=%s item=%d stage=preview_done value=%.3f", rid, itemID, val)
 	return &val, nil
 }

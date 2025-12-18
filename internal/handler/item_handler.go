@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -238,47 +237,34 @@ func (h *ItemHandler) EstimateCO2(c echo.Context) error {
 	}
 	ctx := co2ctx.WithRID(c.Request().Context(), rid)
 	ctx = co2ctx.WithItemID(ctx, id)
-	start := time.Now()
-	item, findErr := h.svc.Get(ctx, id)
-	if findErr != nil {
-		log.Printf("[co2] rid=%s item=%d stage=start err=%v", rid, id, findErr)
+	if _, findErr := h.svc.Get(ctx, id); findErr != nil {
 		if findErr == service.ErrNotFound {
 			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found"))
 		}
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch item"))
 	}
-	titleLen := len(item.Title)
-	descLen := len(item.Description)
-	hasImage := item.ImageURL != nil && strings.TrimSpace(*item.ImageURL) != ""
-	log.Printf("[co2] rid=%s item=%d start uid=%s titleLen=%d descLen=%d img=%t price=%d", rid, id, uid, titleLen, descLen, hasImage, item.Price)
 	val, err := h.svc.EstimateCO2(ctx, id, uid)
 	if err != nil {
 		switch err {
 		case service.ErrNotFound:
-			log.Printf("[co2] rid=%s item=%d stage=error err=not_found", rid, id)
 			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found"))
 		default:
 			if err.Error() == "forbidden" {
-				log.Printf("[co2] rid=%s item=%d stage=error err=forbidden", rid, id)
 				return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not owner"))
 			}
 			if err.Error() == "timeout" || errors.Is(err, context.DeadlineExceeded) {
-				log.Printf("[co2] rid=%s item=%d stage=error err=timeout", rid, id)
 				return c.JSON(http.StatusGatewayTimeout, NewErrorResponse("gateway_timeout", "estimation timed out"))
 			}
 			if errors.Is(err, ai.ErrParseFailed) {
-				log.Printf("[co2] rid=%s item=%d stage=error err=parse_failed", rid, id)
 				return c.JSON(http.StatusUnprocessableEntity, map[string]interface{}{
 					"error":  "parse_failed",
 					"rid":    rid,
 					"itemId": id,
 				})
 			}
-			log.Printf("[co2] rid=%s item=%d stage=error err=%v", rid, id, err)
 			return c.JSON(http.StatusBadGateway, NewErrorResponse("upstream_error", "estimation failed"))
 		}
 	}
-	log.Printf("[co2] rid=%s item=%d stage=finish status=200 totalMs=%d", rid, id, time.Since(start).Milliseconds())
 	return c.JSON(http.StatusOK, map[string]interface{}{"co2Kg": val})
 }
 

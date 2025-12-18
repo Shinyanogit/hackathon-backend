@@ -41,7 +41,6 @@ func run() error {
 		return fmt.Errorf("glob sample items: %w", err)
 	}
 	if len(paths) == 0 {
-		log.Printf("no sample items found at %s", pattern)
 		return nil
 	}
 
@@ -79,7 +78,6 @@ func run() error {
 		inserted++
 	}
 
-	log.Printf("seed complete: inserted=%d skipped=%d total=%d", inserted, skipped, len(paths))
 	return nil
 }
 

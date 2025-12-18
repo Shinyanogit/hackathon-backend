@@ -40,7 +40,6 @@ func main() {
 	srv := server.New(conn, sha, buildTime)
 
 	go func() {
-		log.Printf("starting server on %s", addr)
 		errCh <- srv.Start(addr)
 	}()
 
