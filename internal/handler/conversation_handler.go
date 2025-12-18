@@ -12,11 +12,12 @@ import (
 )
 
 type ConversationHandler struct {
-	svc service.ConversationService
+	svc    service.ConversationService
+	notify service.NotificationService
 }
 
-func NewConversationHandler(svc service.ConversationService) *ConversationHandler {
-	return &ConversationHandler{svc: svc}
+func NewConversationHandler(svc service.ConversationService, notify service.NotificationService) *ConversationHandler {
+	return &ConversationHandler{svc: svc, notify: notify}
 }
 
 type ConversationResponse struct {
@@ -112,6 +113,9 @@ func (h *ConversationHandler) Get(c echo.Context) error {
 		}
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch conversation"))
 	}
+	if h.notify != nil {
+		_ = h.notify.MarkByConversation(c.Request().Context(), uid, convID)
+	}
 	return c.JSON(http.StatusOK, ConversationResponse{
 		ConversationID: cv.ID,
 		ItemID:         cv.ItemID,
@@ -157,6 +161,9 @@ func (h *ConversationHandler) ListMessages(c echo.Context) error {
 			return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not a participant"))
 		}
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch messages"))
+	}
+	if h.notify != nil {
+		_ = h.notify.MarkByConversation(c.Request().Context(), uid, convID)
 	}
 	return c.JSON(http.StatusOK, msgs)
 }

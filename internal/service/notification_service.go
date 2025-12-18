@@ -13,6 +13,8 @@ type NotificationService interface {
 	Notify(ctx context.Context, userUID, typ, title, body string, itemID, convID, purchaseID *uint64)
 	List(ctx context.Context, userUID string, unreadOnly bool, limit int) ([]model.Notification, int64, error)
 	MarkAllRead(ctx context.Context, userUID string) error
+	MarkByConversation(ctx context.Context, userUID string, convID uint64) error
+	MarkByPurchase(ctx context.Context, userUID string, purchaseID uint64) error
 }
 
 type notificationService struct {
@@ -65,6 +67,20 @@ func (s *notificationService) MarkAllRead(ctx context.Context, userUID string) e
 		return nil
 	}
 	return s.repo.MarkAllRead(ctx, userUID)
+}
+
+func (s *notificationService) MarkByConversation(ctx context.Context, userUID string, convID uint64) error {
+	if userUID == "" || convID == 0 {
+		return nil
+	}
+	return s.repo.MarkByConversation(ctx, userUID, convID)
+}
+
+func (s *notificationService) MarkByPurchase(ctx context.Context, userUID string, purchaseID uint64) error {
+	if userUID == "" || purchaseID == 0 {
+		return nil
+	}
+	return s.repo.MarkByPurchase(ctx, userUID, purchaseID)
 }
 
 // helper to return pointer

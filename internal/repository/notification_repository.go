@@ -11,6 +11,8 @@ type NotificationRepository interface {
 	Create(ctx context.Context, n *model.Notification) error
 	ListByUser(ctx context.Context, userUID string, unreadOnly bool, limit int) ([]model.Notification, error)
 	MarkAllRead(ctx context.Context, userUID string) error
+	MarkByConversation(ctx context.Context, userUID string, convID uint64) error
+	MarkByPurchase(ctx context.Context, userUID string, purchaseID uint64) error
 	CountUnread(ctx context.Context, userUID string) (int64, error)
 	SetDB(db *gorm.DB)
 }
@@ -47,6 +49,22 @@ func (r *notificationRepository) MarkAllRead(ctx context.Context, userUID string
 	return r.db.WithContext(ctx).
 		Model(&model.Notification{}).
 		Where("user_uid = ? AND read_at IS NULL", userUID).
+		Update("read_at", now).Error
+}
+
+func (r *notificationRepository) MarkByConversation(ctx context.Context, userUID string, convID uint64) error {
+	now := r.db.NowFunc()
+	return r.db.WithContext(ctx).
+		Model(&model.Notification{}).
+		Where("user_uid = ? AND conversation_id = ? AND read_at IS NULL", userUID, convID).
+		Update("read_at", now).Error
+}
+
+func (r *notificationRepository) MarkByPurchase(ctx context.Context, userUID string, purchaseID uint64) error {
+	now := r.db.NowFunc()
+	return r.db.WithContext(ctx).
+		Model(&model.Notification{}).
+		Where("user_uid = ? AND purchase_id = ? AND read_at IS NULL", userUID, purchaseID).
 		Update("read_at", now).Error
 }
 

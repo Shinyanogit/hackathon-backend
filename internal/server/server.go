@@ -67,7 +67,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	notificationSvc := service.NewNotificationService(notificationRepo)
 
 	convSvc := service.NewConversationService(convRepo, itemRepo, notificationSvc)
-	convHandler := handler.NewConversationHandler(convSvc)
+	convHandler := handler.NewConversationHandler(convSvc, notificationSvc)
 
 	purchaseRepo := repository.NewPurchaseRepository(db)
 	revenueRepo := repository.NewUserRevenueRepository(db)
@@ -75,7 +75,7 @@ func New(db *gorm.DB, sha, buildTime string) *Server {
 	revenueSvc := service.NewRevenueService(revenueRepo)
 	treeSvc := service.NewTreePointService(treeRepo)
 	purchaseSvc := service.NewPurchaseService(purchaseRepo, itemRepo, convRepo, notificationSvc, revenueSvc, treeSvc)
-	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc)
+	purchaseHandler := handler.NewPurchaseHandler(purchaseSvc, notificationSvc)
 	revenueHandler := handler.NewRevenueHandler(revenueSvc)
 	treePointHandler := handler.NewTreePointHandler(treeSvc)
 

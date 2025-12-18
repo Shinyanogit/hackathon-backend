@@ -11,11 +11,12 @@ import (
 )
 
 type PurchaseHandler struct {
-	svc service.PurchaseService
+	svc    service.PurchaseService
+	notify service.NotificationService
 }
 
-func NewPurchaseHandler(svc service.PurchaseService) *PurchaseHandler {
-	return &PurchaseHandler{svc: svc}
+func NewPurchaseHandler(svc service.PurchaseService, notify service.NotificationService) *PurchaseHandler {
+	return &PurchaseHandler{svc: svc, notify: notify}
 }
 
 type PurchaseResponse struct {
@@ -106,6 +107,12 @@ func (h *PurchaseHandler) GetByItem(c echo.Context) error {
 			return c.JSON(http.StatusForbidden, NewErrorResponse("forbidden", "not allowed"))
 		default:
 			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", err.Error()))
+		}
+	}
+	if h.notify != nil && p != nil {
+		_ = h.notify.MarkByPurchase(c.Request().Context(), uid, p.ID)
+		if p.ConversationID != 0 {
+			_ = h.notify.MarkByConversation(c.Request().Context(), uid, p.ConversationID)
 		}
 	}
 	return c.JSON(http.StatusOK, toPurchaseResponse(p))
