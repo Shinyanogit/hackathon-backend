@@ -25,7 +25,7 @@ func (h *RevenueHandler) Get(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to fetch revenue"))
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{"revenueCents": rev})
+	return c.JSON(http.StatusOK, map[string]interface{}{"revenueYen": rev})
 }
 
 func (h *RevenueHandler) Withdraw(c echo.Context) error {
@@ -33,20 +33,27 @@ func (h *RevenueHandler) Withdraw(c echo.Context) error {
 	if uid == "" {
 		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
 	}
-	amtStr := c.FormValue("amountCents")
-	if amtStr == "" {
-		amtStr = c.QueryParam("amountCents")
+	var body struct {
+		AmountYen int64 `json:"amountYen"`
 	}
-	amt, err := strconv.ParseInt(amtStr, 10, 64)
-	if err != nil || amt <= 0 {
+	if bindErr := c.Bind(&body); bindErr != nil {
+		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid json"))
+	}
+	amtStr := c.FormValue("amountYen")
+	if amtStr != "" {
+		if parsed, err := strconv.ParseInt(amtStr, 10, 64); err == nil {
+			body.AmountYen = parsed
+		}
+	}
+	if body.AmountYen <= 0 {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid amount"))
 	}
-	rev, err := h.svc.Deduct(c.Request().Context(), uid, amt)
+	rev, err := h.svc.Deduct(c.Request().Context(), uid, body.AmountYen)
 	if err != nil {
 		if err.Error() == "insufficient balance" {
 			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "insufficient balance"))
 		}
 		return c.JSON(http.StatusInternalServerError, NewErrorResponse("internal_error", "failed to withdraw"))
 	}
-	return c.JSON(http.StatusOK, map[string]interface{}{"revenueCents": rev})
+	return c.JSON(http.StatusOK, map[string]interface{}{"revenueYen": rev})
 }
