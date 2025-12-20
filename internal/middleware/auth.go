@@ -69,6 +69,11 @@ func (m *AuthMiddleware) RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid_token"})
 		}
 		c.Set("uid", token.UID)
+		if email, ok := token.Claims["email"].(string); ok {
+			c.Set("email", email)
+		} else {
+			c.Set("email", "")
+		}
 		return next(c)
 	}
 }

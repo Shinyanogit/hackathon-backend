@@ -165,6 +165,8 @@ func (h *ItemHandler) Update(c echo.Context) error {
 	if uid == "" {
 		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
 	}
+	email, _ := c.Get("email").(string)
+	isAdmin := strings.EqualFold(strings.TrimSpace(email), "ymgtsny7@gmail.com")
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 64)
 	if err != nil {
@@ -195,7 +197,18 @@ func (h *ItemHandler) Update(c echo.Context) error {
 	if req.Status != nil {
 		status = *req.Status
 	}
-	item, err := h.svc.UpdateOwned(c.Request().Context(), id, uid, title, description, price, imageURL, category, status)
+	ownerUID := uid
+	if isAdmin {
+		item, findErr := h.svc.Get(c.Request().Context(), id)
+		if findErr != nil {
+			if findErr == service.ErrNotFound {
+				return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found or not owner"))
+			}
+			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "failed to load item"))
+		}
+		ownerUID = item.SellerUID
+	}
+	item, err := h.svc.UpdateOwned(c.Request().Context(), id, ownerUID, title, description, price, imageURL, category, status)
 	if err != nil {
 		if err == service.ErrNotFound {
 			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found or not owner"))
@@ -210,12 +223,25 @@ func (h *ItemHandler) Delete(c echo.Context) error {
 	if uid == "" {
 		return c.JSON(http.StatusUnauthorized, NewErrorResponse("unauthorized", "missing uid"))
 	}
+	email, _ := c.Get("email").(string)
+	isAdmin := strings.EqualFold(strings.TrimSpace(email), "ymgtsny7@gmail.com")
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "invalid id"))
 	}
-	if err := h.svc.DeleteOwned(c.Request().Context(), id, uid); err != nil {
+	ownerUID := uid
+	if isAdmin {
+		item, findErr := h.svc.Get(c.Request().Context(), id)
+		if findErr != nil {
+			if findErr == service.ErrNotFound {
+				return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found or not owner"))
+			}
+			return c.JSON(http.StatusBadRequest, NewErrorResponse("bad_request", "failed to load item"))
+		}
+		ownerUID = item.SellerUID
+	}
+	if err := h.svc.DeleteOwned(c.Request().Context(), id, ownerUID); err != nil {
 		if err == service.ErrNotFound {
 			return c.JSON(http.StatusNotFound, NewErrorResponse("not_found", "item not found or not owner"))
 		}
